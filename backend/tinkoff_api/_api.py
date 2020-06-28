@@ -1,13 +1,11 @@
 from functools import wraps
-from typing import Optional, Dict, Any
+from typing import Optional
 from urllib.parse import urljoin
 
 import requests
 
-from backend.tinkoff_api.exceptions import PermissionDeniedError, WrongToken, UnauthorizedError, UnknownError
-
-
-T_JSON = Dict[Any, Any]
+from tinkoff_api.annotations import TMarketStocks, TUserAccounts200
+from tinkoff_api.exceptions import PermissionDeniedError, UnauthorizedError, UnknownError
 
 
 def only_with_production_token(func):
@@ -30,92 +28,125 @@ def only_authorized(func):
     return wrapper
 
 
+def generate_url(func):
+    @wraps(func)
+    def wrapper(profile, *args, **kwargs):
+        if kwargs.get('url') is not None:
+            raise ValueError('Нельзя передавать аргумент url')
+        path = func.__name__.split('_')
+        if profile.is_sandbox_token_valid:
+            path.insert(0, 'sandbox')
+        else:
+            path.insert(0, 'production')
+        url = TinkoffApiUrl.url(*path)
+        kwargs['url'] = url
+        result = func(profile, *args, **kwargs)
+        return result
+    return wrapper
+
+
 class TinkoffApiUrl:
-    production_rest = 'https://api-invest.tinkoff.ru/openapi'
-    production_streaming = 'wss://api-invest.tinkoff.ru/openapi/md/v1/md-openapi/ws'
+    production_url = 'https://api-invest.tinkoff.ru/openapi/'
+    production_streaming_url = 'wss://api-invest.tinkoff.ru/openapi/md/v1/md-openapi/ws'
+    sandbox_url = 'https://api-invest.tinkoff.ru/openapi/sandbox/'
 
-    # Операции в sandbox
-    sandbox_rest = 'https://api-invest.tinkoff.ru/openapi/sandbox'
-    sandbox_rest_base_sandbox = urljoin(sandbox_rest, '/sandbox')
-    sandbox_rest_register = urljoin(sandbox_rest_base_sandbox, '/register')
-    sandbox_rest_currencies_balance = urljoin(sandbox_rest_base_sandbox, '/currencies/balance')
-    sandbox_rest_positions_balance = urljoin(sandbox_rest_base_sandbox, '/positions/balance')
-    sandbox_rest_remove = urljoin(sandbox_rest_base_sandbox, '/remove')
-    sandbox_rest_clear = urljoin(sandbox_rest_base_sandbox, '/clear')
+    class _Url:
+        def __init__(self, url):
+            self._url = url
 
-    # Операции заявок
-    sandbox_rest_orders = urljoin(sandbox_rest, '/orders')
-    sandbox_rest_orders_limit_order = urljoin(sandbox_rest_orders, '/limit-order')
-    sandbox_rest_orders_market_order = urljoin(sandbox_rest_orders, '/market-order')
-    sandbox_rest_orders_cancel = urljoin(sandbox_rest_orders, '/cancel')
+        def __getattr__(self, attr):
+            attr = attr.strip('/') + '/'
+            return TinkoffApiUrl._Url(urljoin(self._url, attr))
 
-    # Операции с портфелем пользователя
-    sandbox_rest_portfolio = urljoin(sandbox_rest, '/portfolio')
-    sandbox_rest_portfolio_currencies = urljoin(sandbox_rest_portfolio, '/currencies')
+        def url(self):
+            return self._url
 
-    # Получение информации по бумагам
-    sandbox_rest_market = urljoin(sandbox_rest, '/market')
-    sandbox_rest_market_stocks = urljoin(sandbox_rest_market, '/stocks')
-    sandbox_rest_market_bonds = urljoin(sandbox_rest_market, '/bonds')
-    sandbox_rest_market_etfs = urljoin(sandbox_rest_market, '/etfs')
-    sandbox_rest_market_currencies = urljoin(sandbox_rest_market, '/currencies')
-    sandbox_rest_market_candles = urljoin(sandbox_rest_market, '/candles')
-    sandbox_rest_market_by_figi = urljoin(sandbox_rest_market, '/by-figi')
-    sandbox_rest_market_by_ticker = urljoin(sandbox_rest_market, '/by-ticker')
+    production = _Url(production_url)
+    prod = production
+    sandbox = _Url(sandbox_url)
+    sand = sandbox
 
-    # Получение информации по операциям
-    sandbox_rest_operations = urljoin(sandbox_rest, '/operations')
+    @staticmethod
+    def url(*args):
+        if not args:
+            raise ValueError('Должен быть передан хотя бы один аргумент')
+        base = TinkoffApiUrl
+        for path in args:
+            base = getattr(base, path)
+        return base.url()
 
 
 class TinkoffProfile:
-    def __init__(self, production_token: Optional[str], sandbox_token: Optional[str]):
-        if bool(production_token) == bool(sandbox_token):
-            raise WrongToken.OnlyOneError('Только один токен должен быть указан')
+    def __init__(self, token: str):
         self._session = requests.session()
-        self.production_token: str = production_token
+        self.token = token
         self.is_production_token_valid: bool = False
-        self.sandbox_token: str = sandbox_token
         self.is_sandbox_token_valid: bool = False
-
-        self.tracking_id: Optional[str] = None
         self.broker_account_id: Optional[str] = None
 
-    def auth(self) -> bool:
-        """ Авторизация по токену """
-        # TODO: сделать для production_token
-        if self.sandbox_token:
-            response = self._session.post(
-                TinkoffApiUrl.sandbox_rest_register,
-                headers={'Authorization': f'Bearer {self.sandbox_token}'}
+    def auth(self, first='production') -> str:
+        """
+            Авторизация по токену
+        :param first: Какой метод авторизации будет первым (production/sandbox).
+            Если авторизация не пройдет успешно, будет попытка вызвать другой метод
+        """
+        first = first.lower()
+        methods = ('production', 'prod', 'sandbox', 'sand')
+        if first not in methods:
+            raise ValueError(f'Передайте одно из следующих значений аргумента first: {", ".join(methods)}')
+
+        url1 = TinkoffApiUrl.production.user.accounts.url()
+        url2 = TinkoffApiUrl.sandbox.user.accounts.url()
+
+        if first.startswith('sand'):
+            url1, url2 = url2, url1
+
+        for url in (url1, url2):
+            response = self._session.get(
+                url, headers={'Authorization': f'Bearer {self.token}'}
             )
-            if response.status_code == requests.status_codes.codes.ok:
-                self.is_sandbox_token_valid = True
-                self.tracking_id = response.json()['trackingId']
-                self.broker_account_id = response.json()['payload']['brokerAccountId']
+            if response.status_code == 200:
+                # FIXME: может быть несколько аккаунтов
+                response_json: TUserAccounts200 = response.json()
+                self.broker_account_id: str = response_json['payload']['accounts'][0]['brokerAccountId']
+                self.is_sandbox_token_valid = self.broker_account_id.startswith('SB')
+                self.is_production_token_valid = not self.is_sandbox_token_valid
                 self._session.headers.update({
-                    'Authorization': f'Bearer {self.sandbox_token}'
+                    'Authorization': f'Bearer {self.token}'
                 })
-                return True
-            elif response.status_code == requests.status_codes.codes.unauthorized:
-                raise UnauthorizedError('Неверный sandbox_token')
-            else:
-                raise UnknownError(
-                    'Неизвестная ошибка во время попытки авторизации,'
-                    f'status_code={response.status_code}, content={response.content}'
-                )
-        else:
-            raise UnauthorizedError('Авторизация по токенам не удалась')
+                return 'sandbox' if self.is_sandbox_token_valid else 'production'
+            elif response.status_code in (401, 500):
+                pass
+        raise UnauthorizedError('Авторизация по токенам не удалась')
 
     @property
     def is_authorized(self) -> bool:
         return self.is_sandbox_token_valid or self.is_production_token_valid
 
     @only_authorized
-    def market_stocks(self) -> T_JSON:
-        if self.is_sandbox_token_valid:
-            response = self._session.get(TinkoffApiUrl.sandbox_rest_market_stocks)
-            if response.status_code == requests.status_codes.codes.ok:
-                return response.json()
+    @generate_url
+    def market_stocks(self, url: str) -> TMarketStocks:
+        response = self._session.get(url)
+        if response.status_code == 200:
+            return response.json()
+        elif response.status_code in (401, 500):
+            raise UnauthorizedError('Токен не действителен')
         else:
-            # TODO: Для production_token
-            pass
+            raise UnknownError(f'Неизвестный status_code запроса: {response.status_code}')
+
+    @only_authorized
+    @generate_url
+    def operations(self, from_datetime, to_datetime, url: str):
+        response = self._session.get(url, data={'from': from_datetime, 'to': to_datetime})
+        if response.status_code == 200:
+            return response.json()
+        elif response.status_code in (401, 500):
+            raise UnauthorizedError('Токен не действителен')
+        else:
+            raise UnknownError(f'Неизвестный status_code запроса: {response.status_code}')
+
+    def close(self):
+        self._session.close()
+
+    def __str__(self):
+        return f'{self.__class__.__name__} (auth={self.auth()})'

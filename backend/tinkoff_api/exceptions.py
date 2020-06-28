@@ -1,8 +1,3 @@
-class WrongToken:
-    class OnlyOneError(Exception):
-        pass
-
-
 class PermissionDeniedError(Exception):
     pass
 
