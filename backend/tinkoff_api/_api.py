@@ -1,11 +1,12 @@
+import datetime as dt
 from functools import wraps
 from typing import Optional
 from urllib.parse import urljoin
 
 import requests
 
-from tinkoff_api.annotations import TMarketStocks, TUserAccounts200
-from tinkoff_api.exceptions import PermissionDeniedError, UnauthorizedError, UnknownError
+from tinkoff_api.annotations import TMarketStocks, TUserAccounts200, TOperations
+from tinkoff_api.exceptions import PermissionDeniedError, UnauthorizedError, UnknownError, InvalidArgumentError
 
 
 def only_with_production_token(func):
@@ -32,7 +33,7 @@ def generate_url(func):
     @wraps(func)
     def wrapper(profile, *args, **kwargs):
         if kwargs.get('url') is not None:
-            raise ValueError('Нельзя передавать аргумент url')
+            raise InvalidArgumentError('Нельзя передавать аргумент url')
         path = func.__name__.split('_')
         if profile.is_sandbox_token_valid:
             path.insert(0, 'sandbox')
@@ -69,7 +70,7 @@ class TinkoffApiUrl:
     @staticmethod
     def url(*args):
         if not args:
-            raise ValueError('Должен быть передан хотя бы один аргумент')
+            raise InvalidArgumentError('Должен быть передан хотя бы один аргумент')
         base = TinkoffApiUrl
         for path in args:
             base = getattr(base, path)
@@ -93,7 +94,7 @@ class TinkoffProfile:
         first = first.lower()
         methods = ('production', 'prod', 'sandbox', 'sand')
         if first not in methods:
-            raise ValueError(f'Передайте одно из следующих значений аргумента first: {", ".join(methods)}')
+            raise InvalidArgumentError(f'Передайте одно из следующих значений аргумента first: {", ".join(methods)}')
 
         url1 = TinkoffApiUrl.production.user.accounts.url()
         url2 = TinkoffApiUrl.sandbox.user.accounts.url()
@@ -136,8 +137,22 @@ class TinkoffProfile:
 
     @only_authorized
     @generate_url
-    def operations(self, from_datetime, to_datetime, url: str):
-        response = self._session.get(url, data={'from': from_datetime, 'to': to_datetime})
+    def operations(self, from_datetime: dt.datetime, to_datetime: dt.datetime, url: str) -> TOperations:
+        if not (isinstance(from_datetime, dt.datetime) and isinstance(to_datetime, dt.datetime)):
+            raise InvalidArgumentError('Аргументы from_datetime и to_datetime должны быть типа datetime')
+        if from_datetime >= to_datetime:
+            raise InvalidArgumentError('Аргумент from_datetime должен быть меньше аргумента to_datetime')
+        if getattr(from_datetime, 'tzinfo', None) is None or getattr(to_datetime, 'tzinfo', None) is None:
+            raise InvalidArgumentError('Аргументы from_datetime и to_datetime должны быть с timezone')
+        if not (callable(getattr(from_datetime, 'isoformat', None)) and
+                callable(getattr(to_datetime, 'isoformat', None))):
+            raise InvalidArgumentError('Аргументы from_datetime и to_datetime должны иметь метод isoformat')
+        response = self._session.get(
+            url, data={
+                'from': from_datetime.isoformat(),
+                'to': to_datetime.isoformat()
+            }
+        )
         if response.status_code == 200:
             return response.json()
         elif response.status_code in (401, 500):
@@ -147,6 +162,15 @@ class TinkoffProfile:
 
     def close(self):
         self._session.close()
+
+    def __enter__(self):
+        if not self.is_authorized:
+            self.auth()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
+        return True
 
     def __str__(self):
         return f'{self.__class__.__name__} (auth={self.auth()})'

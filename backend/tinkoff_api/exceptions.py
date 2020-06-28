@@ -8,3 +8,7 @@ class UnauthorizedError(Exception):
 
 class UnknownError(Exception):
     pass
+
+
+class InvalidArgumentError(Exception):
+    pass
