@@ -11,6 +11,12 @@ https://docs.djangoproject.com/en/3.0/ref/settings/
 """
 
 import os
+from urllib.parse import urlparse
+
+from dotenv import load_dotenv
+
+
+load_dotenv()
 
 # Build paths inside the project like this: os.path.join(BASE_DIR, ...)
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -20,12 +26,14 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # See https://docs.djangoproject.com/en/3.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = '&l=zz4=6ar9g(70@xc!(6h%b^^&^b=4lb$)ywygnccshzjwwr7'
+SECRET_KEY = os.getenv('SECRET_KEY')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = False
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = [
+    urlparse(os.getenv('SITE_ADDRESS')).hostname,
+]
 
 
 # Application definition
@@ -37,6 +45,10 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+
+    # local
+    'users',
+    'market'
 ]
 
 MIDDLEWARE = [
@@ -80,6 +92,8 @@ DATABASES = {
     }
 }
 
+if 'postgres' in DATABASES['default']['ENGINE']:
+    SOCIAL_AUTH_POSTGRES_JSONFIELD = True
 
 # Password validation
 # https://docs.djangoproject.com/en/3.0/ref/settings/#auth-password-validators
@@ -103,9 +117,9 @@ AUTH_PASSWORD_VALIDATORS = [
 # Internationalization
 # https://docs.djangoproject.com/en/3.0/topics/i18n/
 
-LANGUAGE_CODE = 'en-us'
+LANGUAGE_CODE = os.getenv('LANGUAGE_CODE', 'ru-Ru')
 
-TIME_ZONE = 'UTC'
+TIME_ZONE = os.getenv('TIME_ZONE')
 
 USE_I18N = True
 
@@ -118,3 +132,10 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/3.0/howto/static-files/
 
 STATIC_URL = '/static/'
+
+AUTH_USER_MODEL = 'users.Investor'
+
+try:
+    from .local_settings import *
+except ImportError:
+    pass

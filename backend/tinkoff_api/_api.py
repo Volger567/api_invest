@@ -30,6 +30,7 @@ def only_authorized(func):
 
 
 def generate_url(func):
+    """ Генерирует url из названия обернутой функции и типа токена """
     @wraps(func)
     def wrapper(profile, *args, **kwargs):
         if kwargs.get('url') is not None:
