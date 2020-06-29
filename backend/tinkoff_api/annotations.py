@@ -109,7 +109,7 @@ class TOperationPayloadBuyOperation(TypedDict):
     price: float
     payment: float
     currency: str
-    # В отличие от продаже, комиссия для покупки расчитывается отдельно
+    # В отличие от продажи, комиссия для покупки расчитывается отдельно
     # поэтому ключа commission нет
     trades: List[TOperationsPayloadOperationTrade]
     status: str
