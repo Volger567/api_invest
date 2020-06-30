@@ -22,6 +22,7 @@ class InvestmentAccount(models.Model):
         ABSOLUTE = 'Abs', 'Абсолютный'
         RELATIVE = 'Rel', 'Относительный'
 
+    name = models.CharField(verbose_name='Название счета', max_length=256)
     creator = models.ForeignKey(
         Investor, verbose_name='Создатель счета', on_delete=models.CASCADE,
         related_name='owned_investor_accounts'

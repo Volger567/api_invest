@@ -28,6 +28,9 @@ class Currency(models.Model):
             self.iso_code = iso_code.upper()
         return super().save(*args, **kwargs)
 
+    def __str__(self):
+        return self.name
+
 
 class Operation(models.Model):
     class Meta:
@@ -93,6 +96,9 @@ class Deal(models.Model):
 
     operations = models.ForeignKey(Operation, verbose_name='Операции', on_delete=models.CASCADE)
     is_closed = models.BooleanField(verbose_name='Закрыта?', default=False)
+    investment_account = models.ForeignKey(
+        InvestmentAccount, verbose_name='Инвестиционный счет', on_delete=models.CASCADE
+    )
 
     @property
     def opened_at(self) -> Optional['datetime.datetime']:
@@ -115,3 +121,18 @@ class Deal(models.Model):
             Operation.Types.BUY, Operation.Types.BUY_CARD, Operation.Types.BROKER_COMMISSION
         )).aggregate(s=Sum('payment'))['s']
         return income
+
+
+class Stock(models.Model):
+    class Meta:
+        verbose_name = 'Акция'
+        verbose_name_plural = 'Акции'
+
+    figi = models.CharField(verbose_name='FIGI', max_length=32, unique=True)
+    ticker = models.CharField(verbose_name='Ticker', max_length=16, unique=True)
+    isin = models.CharField(verbose_name='ISIN', max_length=32)
+    # В субвалюте
+    min_price_increment = models.PositiveSmallIntegerField(verbose_name='Шаг цены', null=True)
+    lot = models.PositiveIntegerField(verbose_name='шт/лот')
+    currency = models.ForeignKey(Currency, verbose_name='Валюта', on_delete=models.CASCADE)
+    name = models.CharField(verbose_name='Название', max_length=250)

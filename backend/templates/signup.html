@@ -1,0 +1,21 @@
+{% extends 'base.html' %}
+{% load static %}
+{% load crispy_forms_tags %}
+
+{% block link %}
+<link rel="stylesheet" href="{% static 'css/reg_auth_forms.css' %}">
+{% endblock %}
+
+{% block content %}
+  <form class="form-login" method="post">
+    {% csrf_token %}
+    <h2 class="form-login-heading text-center">Регистрация</h2>
+    {{ form|crispy }}
+
+    <button class="btn btn-lg btn-primary btn-block" type="submit">Зарегистрироваться</button>
+    <a class="btn btn-lg btn-primary btn-block" href="{% url 'login' %}" role="button">Войти на сайт</a>
+  </form>
+{% endblock %}
+
+{% block footer %}
+{% endblock %}

@@ -47,8 +47,9 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
 
     # local
-    'users',
-    'market'
+    'users.apps.UsersConfig',
+    'market.apps.MarketConfig',
+    'crispy_forms'
 ]
 
 MIDDLEWARE = [
@@ -66,7 +67,9 @@ ROOT_URLCONF = 'core.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        'DIRS': [
+            os.path.join(BASE_DIR, 'templates')
+        ],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -119,7 +122,7 @@ AUTH_PASSWORD_VALIDATORS = [
 
 LANGUAGE_CODE = os.getenv('LANGUAGE_CODE', 'ru-Ru')
 
-TIME_ZONE = os.getenv('TIME_ZONE')
+TIME_ZONE = os.getenv('TIME_ZONE', 'Europe/Moscow')
 
 USE_I18N = True
 
@@ -132,8 +135,17 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/3.0/howto/static-files/
 
 STATIC_URL = '/static/'
+STATICFILES_DIRS = [
+    os.path.join(BASE_DIR, 'static')
+]
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+
 
 AUTH_USER_MODEL = 'users.Investor'
+LOGIN_REDIRECT_URL = 'index'
+LOGIN_URL = 'login'
+
+CRISPY_TEMPLATE_PACK = 'bootstrap4'
 
 try:
     from .local_settings import *

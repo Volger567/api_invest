@@ -1,0 +1,11 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block content %}
+  {% if is_email_confirmed %}
+    <h2>Email подтвержден</h2>
+    <a href="{% url 'login' %}" class="btn btn-default" role="button">Войти в систему</a>
+  {% else %}
+    <h3>Письмо с подтверждением регистрации отправлено на электронную почту</h3>
+  {% endif %}
+{% endblock %}
