@@ -19,8 +19,8 @@ class InvestmentAccount(models.Model):
         verbose_name_plural = 'Инвестиционные счета'
 
     class CapitalSharingPrinciples(models.TextChoices):
-        ABSOLUTE = 'Abs', 'Абсолютный'
-        RELATIVE = 'Rel', 'Относительный'
+        ABSOLUTE = 'abs', 'Абсолютный'
+        RELATIVE = 'rel', 'Относительный'
 
     name = models.CharField(verbose_name='Название счета', max_length=256)
     creator = models.ForeignKey(

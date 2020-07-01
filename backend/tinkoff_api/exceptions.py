@@ -1,3 +1,7 @@
+class InvalidTokenError(Exception):
+    pass
+
+
 class PermissionDeniedError(Exception):
     pass
 

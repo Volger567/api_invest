@@ -1,6 +1,88 @@
 {% extends 'base.html' %}
 {% load static %}
 
-{% block content %}
 
+{% block link %}
+  <link rel="stylesheet" href="{% static 'css/investment_accounts.css' %}">
+{% endblock %}
+
+{% block content %}
+  <div class="owned-investment-accounts text-center">
+  <h2>Ваши инвестиционные счета</h2>
+  {% if owned_investment_accounts %}
+    <ul class="list-group w-50 mx-auto owner-investment-accounts">
+      {% for account in owned_investment_accounts %}
+        <li class="list-group-item">{{ account.name }} ({{ account.broker_account_id }})</li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <br>
+    <h5>У вас пока нет инвестиционных счетов.
+      <span class="add-owned-investment-account" data-toggle="modal" data-target="#add-owned-investment-account-modal">Хотите добавить?</span>
+    </h5>
+    <!-- Modal -->
+    <div class="modal fade" id="add-owned-investment-account-modal" tabindex="-1" role="dialog"
+         aria-labelledby="add-owned-investment-account-modal-label" aria-hidden="true">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="add-owned-investment-account-modal-label">Добавить инвестиционный счет</h5>
+            <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+              <span aria-hidden="true">&times;</span>
+            </button>
+          </div>
+          <div class="modal-body">
+            <form>
+              <div class="form-group text-left">
+                <label for="add-owned-investment-account-modal-name">Название</label>
+                <input type="email" class="form-control" id="add-owned-investment-account-modal-name"
+                       aria-describedby="add-owned-investment-account-modal-name-help">
+                <small id="add-owned-investment-account-modal-name-help" class="form-text text-muted">Придумайте название для инвестиционного счета</small>
+                <small id="add-owned-investment-account-modal-name-error" class="form-text modal-error"></small>
+              </div>
+              <div class="form-group text-left">
+                <label for="add-owned-investment-account-modal-name">Токен</label>
+                <input class="form-control" id="add-owned-investment-account-modal-token"
+                       aria-describedby="add-owned-investment-account-modal-token-help">
+                <small id="add-owned-investment-account-modal-token-help" class="form-text text-muted">
+                  Получить токен можно <a href="https://www.tinkoff.ru/invest/settings/" target="_blank">тут</a> в разделе<br>
+                  Токен для OpenAPI - Токен для торговли
+                </small>
+                <small id="add-owned-investment-account-modal-token-error" class="form-text modal-error"></small>
+              </div>
+              <div class="form-group text-left">
+                <label for="add-owned-investment-account-modal-capital-sharing-type">Тип разделения капитала</label>
+                <select class="form-control" id="add-owned-investment-account-modal-capital-sharing-type">
+                  <option value="abs" selected>Абсолютное разделение</option>
+                  <option value="rel">Относительное разделение</option>
+                </select>
+              </div>
+            </form>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-primary" id="add-owned-investment-account-modal-add">Добавить</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  {% endif %}
+  </div>
+
+  <div class="co-owned-investment-accounts text-center">
+  <h2>Ваши совместные инвестиционные счета</h2>
+  {% if co_owned_investment_accounts %}
+    <ul class="list-group">
+      {% for account in owned_investment_accounts %}
+        <li class="list-group-item">{{ account.name }}</li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <br>
+    <h5>У вас пока нет совместных инвестиционных счетов</h5>
+  {% endif %}
+  </div>
+{% endblock %}
+
+{% block body_script %}
+  <script src="{% static 'js/investment_accounts.js' %}"></script>
 {% endblock %}

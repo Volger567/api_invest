@@ -6,7 +6,8 @@ from urllib.parse import urljoin
 import requests
 
 from tinkoff_api.annotations import TMarketStocks, TUserAccounts200, TOperations
-from tinkoff_api.exceptions import PermissionDeniedError, UnauthorizedError, UnknownError, InvalidArgumentError
+from tinkoff_api.exceptions import PermissionDeniedError, UnauthorizedError, UnknownError, InvalidArgumentError, \
+    InvalidTokenError
 
 
 def only_with_production_token(func):
@@ -81,6 +82,10 @@ class TinkoffApiUrl:
 class TinkoffProfile:
     def __init__(self, token: str):
         self._session = requests.session()
+        try:
+            token.encode('latin-1')
+        except (UnicodeEncodeError, AttributeError):
+            raise InvalidTokenError('Неверный токен')
         self.token = token
         self.is_production_token_valid: bool = False
         self.is_sandbox_token_valid: bool = False
@@ -119,7 +124,7 @@ class TinkoffProfile:
                 return 'sandbox' if self.is_sandbox_token_valid else 'production'
             elif response.status_code in (401, 500):
                 pass
-        raise UnauthorizedError('Авторизация по токенам не удалась')
+        raise InvalidTokenError('Авторизация по токенам не удалась')
 
     @property
     def is_authorized(self) -> bool:
@@ -171,7 +176,6 @@ class TinkoffProfile:
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.close()
-        return True
 
     def __str__(self):
         return f'{self.__class__.__name__} (auth={self.auth()})'

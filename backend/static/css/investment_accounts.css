@@ -1,0 +1,22 @@
+.co-owned-investment-accounts {
+  margin-top: 150px;
+}
+
+.add-owned-investment-account {
+  color: rgba(18, 100, 194, .9);
+  cursor: pointer;
+}
+
+#add-owned-investment-account-modal-add {
+  background-color: rgba(20, 100, 200, .9);
+}
+
+.modal-error {
+  color: rgba(255, 10, 50, .7)
+}
+
+.owned-investment-accounts li {
+  background-color: rgba(20, 100, 250, .6);
+  color: rgba(255, 230, 240, 1);
+  font-size: 1.1em;
+}
