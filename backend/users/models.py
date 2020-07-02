@@ -1,9 +1,14 @@
 from django.contrib.auth.models import AbstractUser, Group
 from django.db import models
+from django.db.models.signals import post_save
+from django.dispatch import receiver
 
 
 class Investor(AbstractUser):
     email = models.EmailField(verbose_name='Email', blank=True, unique=True)
+    default_investment_account = models.ForeignKey(
+        'InvestmentAccount', verbose_name='Инвестиционный счет по умолчанию', on_delete=models.SET_NULL, null=True
+    )
 
 
 class InvestorGroup(Group):
@@ -39,3 +44,11 @@ class InvestmentAccount(models.Model):
         choices=CapitalSharingPrinciples.choices,
         max_length=16
     )
+
+
+@receiver(post_save, sender=InvestmentAccount)
+def investment_account_post_save(sender, instance, created, *args, **kwargs):
+    if created:
+        creator: Investor = instance.creator
+        creator.default_investment_account = instance
+        creator.save(update_fields=('default_investment_account', ))

@@ -15,8 +15,18 @@
   color: rgba(255, 10, 50, .7)
 }
 
-.owned-investment-accounts li {
-  background-color: rgba(20, 100, 250, .6);
+
+.investment-accounts {
+  border-radius: 10px;
+}
+.investment-accounts li {
+  background-color: rgba(120, 100, 150, .5);
   color: rgba(255, 230, 240, 1);
   font-size: 1.1em;
+  cursor: pointer;
+  border-radius: 10px;
+}
+
+.default-investment-account {
+  background-color: rgba(20, 100, 250, .8) !important;
 }

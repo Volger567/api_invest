@@ -9,18 +9,34 @@
 {% block content %}
   <div class="owned-investment-accounts text-center">
   <h2>Ваши инвестиционные счета</h2>
+
   {% if owned_investment_accounts %}
-    <ul class="list-group w-50 mx-auto owner-investment-accounts">
+    <ul class="list-group w-50 mx-auto owned-investment-accounts investment-accounts">
       {% for account in owned_investment_accounts %}
-        <li class="list-group-item">{{ account.name }} ({{ account.broker_account_id }})</li>
+        {% if request.user.default_investment_account == account %}
+          <li class="list-group-item default-investment-account mb-2" data-uuid="{{ account.pk }}">
+            <span class="float-left remove-investment-account">&times;</span>
+            <span>{{ account.name }} ({{ account.broker_account_id }})</span>
+            <span class="float-right default-investment-account-mark">&#171;</span>
+          </li>
+        {% else %}
+          <li class="list-group-item mb-2" data-uuid="{{ account.pk }}">
+            <span class="float-left remove-investment-account">&times;</span>
+            <span>{{ account.name }} ({{ account.broker_account_id }})</span>
+            <span class="float-right default-investment-account-mark invisible">&#171;</span>
+          </li>
+        {% endif %}
       {% endfor %}
     </ul>
+    <br>
+    <span class="add-owned-investment-account" data-toggle="modal" data-target="#add-owned-investment-account-modal">Добавить еще?</span>
   {% else %}
     <br>
     <h5>У вас пока нет инвестиционных счетов.
       <span class="add-owned-investment-account" data-toggle="modal" data-target="#add-owned-investment-account-modal">Хотите добавить?</span>
     </h5>
-    <!-- Modal -->
+  {% endif %}
+  <!-- Modal -->
     <div class="modal fade" id="add-owned-investment-account-modal" tabindex="-1" role="dialog"
          aria-labelledby="add-owned-investment-account-modal-label" aria-hidden="true">
       <div class="modal-dialog">
@@ -41,7 +57,7 @@
                 <small id="add-owned-investment-account-modal-name-error" class="form-text modal-error"></small>
               </div>
               <div class="form-group text-left">
-                <label for="add-owned-investment-account-modal-name">Токен</label>
+                <label for="add-owned-investment-account-modal-token">Токен</label>
                 <input class="form-control" id="add-owned-investment-account-modal-token"
                        aria-describedby="add-owned-investment-account-modal-token-help">
                 <small id="add-owned-investment-account-modal-token-help" class="form-text text-muted">
@@ -65,7 +81,6 @@
         </div>
       </div>
     </div>
-  {% endif %}
   </div>
 
   <div class="co-owned-investment-accounts text-center">
