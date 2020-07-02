@@ -1,9 +1,57 @@
 {% extends 'base.html' %}
 {% load static %}
+{% load math_filters %}
 
 {% block link %}
-
+  <link rel="stylesheet" href="{% static 'css/operations.css' %}">
 {% endblock %}
-{% block content %}
 
+{% block content %}
+  <div class="text-center">
+    <h2>Ваши операции</h2>
+    <ul class="operations list-group list-group-flush m-auto">
+      {% if operations %}
+        {% for operation in operations %}
+          <li class="operation-item list-group-item text-left {% if operation.payment < 0 %} expense {% else %} income {% endif %}">
+            <div class="float-left">
+              <span class="operation-item-date float-left">{{ operation.date }}</span>
+              <br>
+              <span class="operation-item-type float-left">
+                {{ operation.friendly_type_format }}
+              </span>
+            </div>
+            <div class="float-right text-right">
+              <!-- Оплата -->
+              <span class="operation-item-payment">
+                {{ operation.payment|payment_format }}<span class="operation-item-payment-abbreviation">{{ operation.currency.abbreviation }}</span>
+              </span>
+              <!-- Комиссия -->
+              {% if operation.commission %}
+                <br>
+                <span class="operation-item-commission">
+                  {{ operation.commission|payment_format }}<span class="operation-item-payment-abbreviation">{{ operation.currency.abbreviation }}</span>
+                </span>
+                <!-- Ценная бумага -->
+              {% if operation.figi %}
+                <br>
+                <div class="operation-item-figi">
+                  {{ operation.figi.name }}
+                </div>
+              {% endif %}
+              {% endif %}
+            </div>
+          </li>
+        {% endfor %}
+      {% else %}
+        <h5>
+          {% if request.user.default_investment_account %}
+            У вас пока нет операций,  :(
+          {% else %}
+            <a href="{% url 'investment_accounts' %}" class="link-to-create-investment-account">Выберите</a>
+            инвестиционный счет, чтобы увидеть операции
+          {% endif %}
+        </h5>
+      {% endif %}
+    </ul>
+  </div>
 {% endblock %}

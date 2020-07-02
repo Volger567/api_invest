@@ -11,8 +11,10 @@ class IndexView(LoginRequiredMixin, TemplateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['operations'] = Operation.objects.filter(
-            investment_account=self.request.user.default_investment_account
-        )
+            investment_account=self.request.user.default_investment_account,
+            status=Operation.Statuses.DONE
+        ).select_related('currency', 'figi').distinct().order_by('-date')
+        context['operation_types'] = dict(Operation.Types.choices)
         return context
 
 

@@ -1,8 +1,11 @@
 $(document).ready(function() {
   const csrfToken = $('meta[name="csrf-token"]').prop('content')
-
   // Кнопка добавления нового инвестиционного аккаунта
   $('#add-owned-investment-account-modal-add').on('click', function() {
+    let item = $(this)
+    item.prop('disabled', true)
+		$('#overlay').fadeIn().delay(2000).fadeOut();
+
     $.post({
       url: '/api/create-investment-account/',
       headers: {
@@ -22,6 +25,9 @@ $(document).ready(function() {
           if (errors.hasOwnProperty(key))
             $(`#add-owned-investment-account-modal-${key}-error`).text(errors[key])
         }
+      },
+      complete: function() {
+        item.prop('disabled', false)
       }
     });
   })

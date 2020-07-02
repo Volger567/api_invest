@@ -144,8 +144,7 @@ class TOperationPayloadDividendOperation(TypedDict):
     instrumentType: str
     figi: str
     quantity: int
-    # TODO: пока непонятно, могут ли быть дивиденды не целым числом
-    payment: Union[int, float]
+    payment: int
     currency: str
     status: str
     id: str

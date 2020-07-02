@@ -58,12 +58,25 @@ class Operation(models.Model):
     type = models.CharField(verbose_name='Тип', max_length=30, choices=Types.choices)
     date = models.DateTimeField(verbose_name='Дата')
     is_margin_call = models.BooleanField(default=False)
-    # Integer - потому что в наименьшей валюте (копейки/центы)
-    payment = models.IntegerField(verbose_name='Оплата')
+    payment = models.DecimalField(verbose_name='Оплата', max_digits=20, decimal_places=4)
     currency = models.ForeignKey(Currency, verbose_name='Валюта', on_delete=models.SET_NULL, null=True)
 
     status = models.CharField(verbose_name='Статус', choices=Statuses.choices, max_length=16)
     secondary_id = models.CharField(verbose_name='ID', max_length=32)
+
+    # Для операций покупки, продажи и комиссии
+    instrument_type = models.CharField(verbose_name='Тип инструмента', max_length=32, blank=True)
+    quantity = models.PositiveIntegerField(verbose_name='Количество', default=0)
+    figi = models.ForeignKey('Stock', verbose_name='Ценная бумага', on_delete=models.PROTECT, null=True)
+
+    commission = models.DecimalField(verbose_name='Комиссия', max_digits=16, decimal_places=4, null=True)
+
+    @property
+    def friendly_type_format(self):
+        return dict(Operation.Types.choices)[self.type]
+
+    def __str__(self):
+        return f'{self.friendly_type_format} ({self.investment_account} - {self.date})'
 
 
 class Transaction(models.Model):
@@ -78,8 +91,7 @@ class Transaction(models.Model):
     secondary_id = models.CharField(verbose_name='ID', max_length=32)
     date = models.DateTimeField(verbose_name='Дата')
     quantity = models.PositiveIntegerField(verbose_name='Количество шт.')
-    # Integer, в наименьшей валюте
-    price = models.PositiveIntegerField(verbose_name='Цена/шт.')
+    price = models.DecimalField(verbose_name='Цена/шт.', max_digits=20, decimal_places=4)
 
 
 class Deal(models.Model):
@@ -129,8 +141,10 @@ class Stock(models.Model):
     figi = models.CharField(verbose_name='FIGI', max_length=32, unique=True)
     ticker = models.CharField(verbose_name='Ticker', max_length=16, unique=True)
     isin = models.CharField(verbose_name='ISIN', max_length=32)
-    # В субвалюте
-    min_price_increment = models.PositiveSmallIntegerField(verbose_name='Шаг цены', null=True)
+    min_price_increment = models.DecimalField(verbose_name='Шаг цены', max_digits=10, decimal_places=4, default=0)
     lot = models.PositiveIntegerField(verbose_name='шт/лот')
     currency = models.ForeignKey(Currency, verbose_name='Валюта', on_delete=models.CASCADE)
     name = models.CharField(verbose_name='Название', max_length=250)
+
+    def __str__(self):
+        return f'{self.name} ({self.figi})'

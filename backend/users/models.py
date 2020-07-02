@@ -7,7 +7,7 @@ from django.db.models.signals import post_save
 from django.dispatch import receiver
 
 from core import settings
-from market.models import Operation, Currency
+from market.models import Operation, Currency, Stock
 from tinkoff_api import TinkoffProfile
 
 
@@ -57,8 +57,9 @@ class InvestmentAccount(models.Model):
 
 
 @receiver(post_save, sender=InvestmentAccount)
-def investment_account_post_save(sender, instance, created, *args, **kwargs):
-    if created:
+def investment_account_post_save(**kwargs):
+    if kwargs.get('created'):
+        instance = kwargs['instance']
         creator: Investor = instance.creator
         creator.default_investment_account = instance
         creator.save(update_fields=('default_investment_account', ))
@@ -69,28 +70,45 @@ def investment_account_post_save(sender, instance, created, *args, **kwargs):
             from_datetime = project_timezone.localize(datetime.datetime(1900, 1, 1))
             to_datetime = datetime.datetime.now(tz=pytz.timezone(settings.TIME_ZONE))
             operations = tp.operations(from_datetime, to_datetime)['payload']['operations']
-        bulk_create_operations = []
+        pre_bulk_create_operations = []
+        commissions = {}
         currencies = Currency.objects.all()
+
         for operation in operations:
-            # XXX: Тинькофф возвращает время в неправильном формате
+            # XXX: ждем пока Тинькофф исправит
             try:
                 operation_date = project_timezone.localize(
                     datetime.datetime.fromisoformat(operation['date']).replace(tzinfo=None)
                 )
             except ValueError:
                 operation_date = project_timezone.localize(
-                    datetime.datetime.fromisoformat(operation['date'][:19] + operation['date'][-6:]).replace(
-                        tzinfo=None)
+                    datetime.datetime.fromisoformat(
+                        operation['date'][:19] + operation['date'][-6:]).replace(tzinfo=None)
                 )
+            if operation['operationType'] == 'BrokerCommission' and operation['status'] == Operation.Statuses.DONE:
+                commissions[operation_date] = operation
+            elif operation['status'] == Operation.Statuses.DONE:
+                pre_bulk_create_operations.append(
+                    dict(
+                        investment_account=instance, type=operation['operationType'],
+                        date=operation_date, is_margin_call=operation['isMarginCall'],
+                        payment=operation['payment'],
+                        currency=currencies.get(iso_code__iexact=operation['currency']),
+                        status=operation['status'], secondary_id=operation['id'],
+                        instrument_type=operation.get('operationType', ''),
+                        quantity=operation.get('quantity', 0),
+                        figi=None if operation.get('figi') is None else Stock.objects.get(figi=operation['figi'])
+                    )
+                )
+        bulk_create_operations = []
+        for operation in pre_bulk_create_operations:
+            commission = commissions.get(operation['date'])
+            if commission is not None:
+                commission = commission['payment']
             bulk_create_operations.append(
-                Operation(
-                    investment_account=instance, type=operation['operationType'],
-                    date=operation_date, is_margin_call=operation['isMarginCall'],
-                    payment=operation['payment'],
-                    currency=currencies.get(iso_code__iexact=operation['currency']),
-                    status=operation['status'], secondary_id=operation['id']
-                )
+                Operation(**operation, commission=commission)
             )
+
         Operation.objects.bulk_create(bulk_create_operations)
         instance.operations_sync_at = to_datetime
         instance.save(update_fields=('operations_sync_at', ))

@@ -1,0 +1,46 @@
+.operations {
+  width: 60%
+}
+
+.operation-item {
+  margin-top: 10px;
+}
+.operation-item.income {
+  background-color: rgba(50, 255, 50, .15);
+  border-left: 3px solid green;
+}
+.operation-item.expense {
+  background-color: rgba(255, 50, 50, .15);
+  border-left: 3px double red;
+}
+
+.operation-item-date {
+  color: #0a9aa0;
+  font-size: 1.2em;
+}
+
+.operation-item-figi {
+  color: rgba(80, 30, 255, .7);
+  font-weight: bold;
+  font-size: 1.1em;
+  cursor: pointer;
+  max-width: 300px;
+}
+
+.operation-item.income .operation-item-payment {
+  color: rgba(0, 100, 0, .9)
+}
+.operation-item.expense .operation-item-payment {
+  color: rgba(150, 0, 0, .9);
+}
+.operation-item-payment {
+  font-size: 1.25em;
+}
+.operation-item-payment-abbreviation {
+  font-size: .95em;
+  margin-left: 3px;
+}
+
+.link-to-create-investment-account:hover {
+  text-decoration: none;
+}

@@ -7,9 +7,6 @@
   cursor: pointer;
 }
 
-#add-owned-investment-account-modal-add {
-  background-color: rgba(20, 100, 200, .9);
-}
 
 .modal-error {
   color: rgba(255, 10, 50, .7)
