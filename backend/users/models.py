@@ -1,7 +1,14 @@
+import datetime
+
+import pytz
 from django.contrib.auth.models import AbstractUser, Group
 from django.db import models
 from django.db.models.signals import post_save
 from django.dispatch import receiver
+
+from core import settings
+from market.models import Operation, Currency
+from tinkoff_api import TinkoffProfile
 
 
 class Investor(AbstractUser):
@@ -45,6 +52,9 @@ class InvestmentAccount(models.Model):
         max_length=16
     )
 
+    def __str__(self):
+        return f'{self.creator} ({self.broker_account_id})'
+
 
 @receiver(post_save, sender=InvestmentAccount)
 def investment_account_post_save(sender, instance, created, *args, **kwargs):
@@ -52,3 +62,35 @@ def investment_account_post_save(sender, instance, created, *args, **kwargs):
         creator: Investor = instance.creator
         creator.default_investment_account = instance
         creator.save(update_fields=('default_investment_account', ))
+
+        # TODO: отдать это celery
+        with TinkoffProfile(instance.token) as tp:
+            project_timezone = pytz.timezone(settings.TIME_ZONE)
+            from_datetime = project_timezone.localize(datetime.datetime(1900, 1, 1))
+            to_datetime = datetime.datetime.now(tz=pytz.timezone(settings.TIME_ZONE))
+            operations = tp.operations(from_datetime, to_datetime)['payload']['operations']
+        bulk_create_operations = []
+        currencies = Currency.objects.all()
+        for operation in operations:
+            # XXX: Тинькофф возвращает время в неправильном формате
+            try:
+                operation_date = project_timezone.localize(
+                    datetime.datetime.fromisoformat(operation['date']).replace(tzinfo=None)
+                )
+            except ValueError:
+                operation_date = project_timezone.localize(
+                    datetime.datetime.fromisoformat(operation['date'][:19] + operation['date'][-6:]).replace(
+                        tzinfo=None)
+                )
+            bulk_create_operations.append(
+                Operation(
+                    investment_account=instance, type=operation['operationType'],
+                    date=operation_date, is_margin_call=operation['isMarginCall'],
+                    payment=operation['payment'],
+                    currency=currencies.get(iso_code__iexact=operation['currency']),
+                    status=operation['status'], secondary_id=operation['id']
+                )
+            )
+        Operation.objects.bulk_create(bulk_create_operations)
+        instance.operations_sync_at = to_datetime
+        instance.save(update_fields=('operations_sync_at', ))

@@ -10,8 +10,9 @@ class IndexView(LoginRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        # TODO: учесть, что у инвестора может быть инвестиционных счетов
-        # context = Operation.objects.filter(investment_account=self.request.user)
+        context['operations'] = Operation.objects.filter(
+            investment_account=self.request.user.default_investment_account
+        )
         return context
 
 

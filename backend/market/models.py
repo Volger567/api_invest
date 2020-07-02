@@ -3,8 +3,6 @@ from typing import Optional
 from django.db import models
 from django.db.models import Min, Max, Sum
 
-from users.models import InvestmentAccount
-
 
 class Currency(models.Model):
     """ Валюты, в которых могут проводиться операции """
@@ -55,7 +53,7 @@ class Operation(models.Model):
         TAX_DIVIDEND = 'TaxDividend', 'Налог на дивиденды'
 
     investment_account = models.ForeignKey(
-        InvestmentAccount, verbose_name='Инвестиционный счет', on_delete=models.CASCADE
+        'users.InvestmentAccount', verbose_name='Инвестиционный счет', on_delete=models.CASCADE
     )
     type = models.CharField(verbose_name='Тип', max_length=30, choices=Types.choices)
     date = models.DateTimeField(verbose_name='Дата')
@@ -97,7 +95,7 @@ class Deal(models.Model):
     operations = models.ForeignKey(Operation, verbose_name='Операции', on_delete=models.CASCADE)
     is_closed = models.BooleanField(verbose_name='Закрыта?', default=False)
     investment_account = models.ForeignKey(
-        InvestmentAccount, verbose_name='Инвестиционный счет', on_delete=models.CASCADE
+        'users.InvestmentAccount', verbose_name='Инвестиционный счет', on_delete=models.CASCADE
     )
 
     @property
