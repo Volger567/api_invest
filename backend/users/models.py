@@ -53,7 +53,7 @@ class InvestmentAccount(models.Model):
     )
 
     def __str__(self):
-        return f'{self.creator} ({self.broker_account_id})'
+        return f'{self.name} ({self.broker_account_id})'
 
 
 @receiver(post_save, sender=InvestmentAccount)
@@ -102,8 +102,8 @@ def investment_account_post_save(**kwargs):
                 )
         bulk_create_operations = []
         for operation in pre_bulk_create_operations:
-            commission = commissions.get(operation['date'])
-            if commission is not None:
+            commission = commissions.get(operation['date'], 0)
+            if commission:
                 commission = commission['payment']
             bulk_create_operations.append(
                 Operation(**operation, commission=commission)

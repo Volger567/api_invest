@@ -4,7 +4,6 @@ $(document).ready(function() {
   $('#add-owned-investment-account-modal-add').on('click', function() {
     let item = $(this)
     item.prop('disabled', true)
-		$('#overlay').fadeIn().delay(2000).fadeOut();
 
     $.post({
       url: '/api/create-investment-account/',
@@ -49,6 +48,7 @@ $(document).ready(function() {
         investment_accounts.children('.default-investment-account-mark').addClass('invisible')
         item.addClass('default-investment-account')
         item.children('.default-investment-account-mark').removeClass('invisible')
+        $('.default-investment-account-fixed-label').text(item.children('.investment-account-name').text())
       }
     })
   })

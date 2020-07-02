@@ -132,3 +132,12 @@ footer {
   box-shadow: none;
   border: 1px solid #a2b9;
 }
+
+
+.default-investment-account-fixed-label {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  color: rgba(50, 70, 250, .3);
+  cursor: default;
+}

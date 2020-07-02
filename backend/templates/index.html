@@ -22,22 +22,21 @@
             </div>
             <div class="float-right text-right">
               <!-- Оплата -->
-              <span class="operation-item-payment">
+              <div class="operation-item-payment">
                 {{ operation.payment|payment_format }}<span class="operation-item-payment-abbreviation">{{ operation.currency.abbreviation }}</span>
-              </span>
+              </div>
               <!-- Комиссия -->
               {% if operation.commission %}
-                <br>
                 <span class="operation-item-commission">
                   {{ operation.commission|payment_format }}<span class="operation-item-payment-abbreviation">{{ operation.currency.abbreviation }}</span>
                 </span>
-                <!-- Ценная бумага -->
+              {% endif %}
+              <!-- Ценная бумага -->
               {% if operation.figi %}
                 <br>
                 <div class="operation-item-figi">
                   {{ operation.figi.name }}
                 </div>
-              {% endif %}
               {% endif %}
             </div>
           </li>

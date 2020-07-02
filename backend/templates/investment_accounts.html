@@ -16,13 +16,13 @@
         {% if request.user.default_investment_account == account %}
           <li class="list-group-item default-investment-account mb-2" data-uuid="{{ account.pk }}">
             <span class="float-left remove-investment-account">&times;</span>
-            <span>{{ account.name }} ({{ account.broker_account_id }})</span>
+            <span class="investment-account-name">{{ account }}</span>
             <span class="float-right default-investment-account-mark">&#171;</span>
           </li>
         {% else %}
           <li class="list-group-item mb-2" data-uuid="{{ account.pk }}">
             <span class="float-left remove-investment-account">&times;</span>
-            <span>{{ account.name }} ({{ account.broker_account_id }})</span>
+            <span class="investment-account-name">{{ account }}</span>
             <span class="float-right default-investment-account-mark invisible">&#171;</span>
           </li>
         {% endif %}

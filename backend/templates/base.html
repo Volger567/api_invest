@@ -67,6 +67,9 @@
       {% block content %}
       {% endblock %}
     </main>
+    <div class="default-investment-account-fixed-label">
+      {{ request.user.default_investment_account|default:'Инвестиционный счет не выбран' }}
+    </div>
   {% endblock %}
   <!-- Bootstrap core JavaScript
   ================================================== -->
