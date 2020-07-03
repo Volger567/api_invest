@@ -2,9 +2,14 @@
   width: 65%
 }
 
+.operation-new-day {
+  margin-top: 25px;
+  font-size: 1.15em;
+  color: rgb(20, 40, 100)
+}
 /* Блок операции */
 .operation-item {
-  margin-top: 10px;
+  margin-top: 6px;
 }
 .operation-item.income {
   background-color: rgba(100, 255, 225, .2);
@@ -53,6 +58,9 @@
   cursor: pointer;
   max-width: 400px;
   margin-top: 25px;
+}
+.operation-item-figi a {
+  text-decoration: none;
 }
 
 /* Если операций нет, будет показана ссылка на страницу инвестиционных счетов */

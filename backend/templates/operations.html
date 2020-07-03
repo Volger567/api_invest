@@ -9,12 +9,18 @@
 {% block content %}
   <div class="text-center">
     <h2>Ваши операции</h2>
+    {% if 'figi=' in request.get_full_path %}
+      <a href="{% url 'operations' %}" style="text-decoration: none">Сбросить фильтры</a>
+    {% endif %}
     <ul class="operations list-group list-group-flush m-auto">
       {% if operations %}
         {% for operation in operations %}
+          {% ifchanged operation.date.day operation.date.month operation.date.year %}
+            <span class="operation-new-day">{{ operation.date|date }}</span>
+          {% endifchanged %}
           <li class="operation-item list-group-item text-left {% if operation.payment < 0 %} expense {% else %} income {% endif %}">
             <div class="float-left">
-              <span class="operation-item-date float-left">{{ operation.date }}</span>
+              <span class="operation-item-date float-left">{{ operation.date|time }}</span>
               <br>
               <span class="operation-item-type float-left">
                 {{ operation.friendly_type_format }}
@@ -35,7 +41,7 @@
               {% if operation.figi %}
                 <br>
                 <div class="operation-item-figi">
-                  {{ operation.figi.name }}
+                  <a href="{% url 'operations' %}?figi={{ operation.figi.figi }}">{{ operation.figi.name }}</a>
                 </div>
               {% endif %}
             </div>
@@ -44,7 +50,7 @@
       {% else %}
         <h5>
           {% if request.user.default_investment_account %}
-            У вас пока нет операций,  :(
+            Операций не найдено :(
           {% else %}
             <a href="{% url 'investment_accounts' %}" class="link-to-create-investment-account">Выберите</a>
             инвестиционный счет, чтобы увидеть операции
@@ -53,4 +59,8 @@
       {% endif %}
     </ul>
   </div>
+{% endblock %}
+
+{% block body_script %}
+  <script src="{% static 'js/operations.js' %}"></script>
 {% endblock %}

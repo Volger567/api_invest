@@ -18,7 +18,7 @@ from django.contrib import admin
 from django.urls import path, include
 
 from core import settings
-from market.views import IndexView, InvestmentAccountsView
+from market.views import OperationsView, InvestmentAccountsView
 from users.views import SignupView, LoginView, LogoutView
 
 urlpatterns = [
@@ -29,5 +29,6 @@ urlpatterns = [
 
     path('api/', include('api.urls'), name='api'),
     path('investment-accounts/', InvestmentAccountsView.as_view(), name='investment_accounts'),
-    path('', IndexView.as_view(), name='index'),
+    path('operations/', OperationsView.as_view(), name='operations'),
+    path('', OperationsView.as_view(), name='index'),
 ] + static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
