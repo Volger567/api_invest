@@ -1,7 +1,4 @@
-from typing import Optional
-
 from django.db import models
-from django.db.models import Min, Max, Sum
 
 
 class Currency(models.Model):
@@ -34,6 +31,7 @@ class Operation(models.Model):
     class Meta:
         verbose_name = 'Операция'
         verbose_name_plural = 'Операции'
+        ordering = ('date', )
 
     class Statuses(models.TextChoices):
         DONE = 'Done', 'Выполнено'
@@ -71,6 +69,8 @@ class Operation(models.Model):
 
     commission = models.DecimalField(verbose_name='Комиссия', max_digits=16, decimal_places=4, null=True)
 
+    deal = models.ForeignKey('Deal', verbose_name='Сделка', on_delete=models.SET_NULL, null=True)
+
     @property
     def friendly_type_format(self):
         return dict(Operation.Types.choices)[self.type]
@@ -104,33 +104,14 @@ class Deal(models.Model):
         verbose_name = 'Сделка'
         verbose_name_plural = 'Сделки'
 
-    operations = models.ForeignKey(Operation, verbose_name='Операции', on_delete=models.CASCADE)
-    is_closed = models.BooleanField(verbose_name='Закрыта?', default=False)
+    figi = models.ForeignKey('Stock', verbose_name='Ценная бумага', on_delete=models.PROTECT)
     investment_account = models.ForeignKey(
         'users.InvestmentAccount', verbose_name='Инвестиционный счет', on_delete=models.CASCADE
     )
+    is_closed = models.BooleanField(verbose_name='Закрыта сделка?', default=False)
 
-    @property
-    def opened_at(self) -> Optional['datetime.datetime']:
-        return self.operations.objects.filter(type=Operation.Types.BUY).aggregate(res=Min('date'))['res']
-
-    @property
-    def closed_at(self) -> Optional['datetime.datetime']:
-        if self.is_closed:
-            return self.operations.objects.filter(type=Operation.Types.SELL).aggregate(res=Max('date'))['res']
-
-    @property
-    def profit(self) -> float:
-        """
-            Чистая прибыль.
-        Высчитывается как разность между суммой всех доходов (продажа ценных бумаг/дивиденды)
-        и суммой всех расходов (покупка ценных бумаг/покупка ценных бумаг с карты/комиссия брокера)
-        """
-        income = self.operations.objects.filter(type__in=(
-            Operation.Types.SELL, Operation.Types.DIVIDEND,
-            Operation.Types.BUY, Operation.Types.BUY_CARD, Operation.Types.BROKER_COMMISSION
-        )).aggregate(s=Sum('payment'))['s']
-        return income
+    def __str__(self):
+        return f'{self.figi} ({self.is_closed})'
 
 
 class Stock(models.Model):
@@ -147,4 +128,4 @@ class Stock(models.Model):
     name = models.CharField(verbose_name='Название', max_length=250)
 
     def __str__(self):
-        return f'{self.name} ({self.figi})'
+        return self.name

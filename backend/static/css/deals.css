@@ -1,0 +1,51 @@
+.deals {
+  width: 65%
+}
+
+/* Блок сделок */
+.deal-item {
+  margin-top: 6px;
+}
+.deal-item.income {
+  background-color: rgba(100, 255, 225, .2);
+  border-left: 3px solid green;
+}
+.deal-item.expense {
+  background-color: rgba(255, 100, 165, .2);
+  border-left: 3px double red;
+}
+
+/* Закрыта ли сделка */
+.deal-item-is-closed {
+  color: rgba(20, 80, 150, .9);
+  font-weight: bold;
+  font-size: 1.2em;
+}
+
+.deal-item.income .deal-item-profit, .deal-item.income .deal-item-percent-profit {
+  color: rgba(0, 100, 0, .9)
+}
+.deal-item.expense .deal-item-profit, .deal-item.expense .deal-item-percent-profit {
+  color: rgba(150, 0, 0, .9);
+}
+/* Символ валюты */
+.deal-item-profit-abbreviation {
+  font-size: .95em;
+  margin-left: 3px;
+}
+.deal-item-percent-profit-abbreviation {
+  margin-left: 3px;
+  margin-right: -4px;
+}
+/* Ценная бумага */
+.deal-item-figi {
+  color: rgba(20, 80, 150, .9);
+  font-weight: bold;
+  font-size: 1.1em;
+  cursor: pointer;
+  max-width: 400px;
+  margin-top: 25px;
+}
+.deal-item-figi a {
+  text-decoration: none;
+}

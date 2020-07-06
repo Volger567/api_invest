@@ -24,6 +24,9 @@
               <br>
               <span class="operation-item-type float-left">
                 {{ operation.friendly_type_format }}
+                {% if operation.quantity %}
+                  (Лотов: {{ operation.quantity|div:operation.figi.lot }})
+                {% endif %}
               </span>
             </div>
             <div class="float-right text-right">

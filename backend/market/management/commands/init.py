@@ -66,13 +66,12 @@ class Command(BaseCommand):
             new_figies -= figies
             result = []
             for stock in stocks['payload']['instruments']:
-                print(stock)
                 if stock['figi'] in new_figies:
                     result.append(Stock(**{
                         'figi': stock['figi'],
                         'ticker': stock['ticker'],
                         'isin': stock['isin'],
-                        'min_price_increment': stock.get('minPriceIncrement'),
+                        'min_price_increment': stock.get('minPriceIncrement', 0),
                         'lot': stock['lot'],
                         'currency': db_currencies.get(iso_code__iexact=stock['currency']),
                         'name': stock['name']

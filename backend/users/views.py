@@ -14,7 +14,7 @@ class SignupView(FormView):
 
     def form_valid(self, form):
         user = form.save(commit=False)
-        user.generate_email_token(commit=False)
+        # user.generate_email_token(commit=False)
         user.save()
         return super().form_valid(form)
 

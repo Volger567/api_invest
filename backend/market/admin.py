@@ -16,7 +16,12 @@ class TransactionAdmin(admin.ModelAdmin):
 
 
 class DealAdmin(admin.ModelAdmin):
-    list_display = ('investment_account', 'is_closed')
+    list_display = ('investment_account', 'figi', 'operations_count', 'is_closed')
+    ordering = ('is_closed', 'figi')
+
+    def operations_count(self, instance):
+        return instance.operation_set.count()
+    operations_count.short_description = 'Количество операций'
 
 
 class StockAdmin(admin.ModelAdmin):

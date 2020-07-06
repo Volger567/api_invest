@@ -18,7 +18,7 @@ from django.contrib import admin
 from django.urls import path, include
 
 from core import settings
-from market.views import OperationsView, InvestmentAccountsView
+from market.views import OperationsView, InvestmentAccountsView, DealsView
 from users.views import SignupView, LoginView, LogoutView
 
 urlpatterns = [
@@ -28,7 +28,8 @@ urlpatterns = [
     path('logout/', LogoutView.as_view(), name='logout'),
 
     path('api/', include('api.urls'), name='api'),
-    path('investment-accounts/', InvestmentAccountsView.as_view(), name='investment_accounts'),
     path('operations/', OperationsView.as_view(), name='operations'),
+    path('deals/', DealsView.as_view(), name='deals'),
+    path('investment-accounts/', InvestmentAccountsView.as_view(), name='investment_accounts'),
     path('', OperationsView.as_view(), name='index'),
 ] + static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
