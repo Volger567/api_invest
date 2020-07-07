@@ -1,6 +1,11 @@
 from typing import TypedDict, List, Union
 
 
+class TBaseResponse(TypedDict):
+    trackingId: str
+    status: str
+
+
 class TMarketStocksPayloadInstrument(TypedDict):
     figi: str
     ticker: str
@@ -17,10 +22,8 @@ class TMarketStocksPayload(TypedDict):
     total: int
 
 
-class TMarketStocks(TypedDict):
-    trackingId: str
+class TMarketStocks(TBaseResponse):
     payload: TMarketStocksPayload
-    status: str
 
 
 class TUserAccountsPayloadAccount(TypedDict):
@@ -32,10 +35,8 @@ class TUserAccounts200Payload(TypedDict):
     accounts: List[TUserAccountsPayloadAccount]
 
 
-class TUserAccounts200(TypedDict):
-    trackingId: str
+class TUserAccounts200(TBaseResponse):
     payload: TUserAccounts200Payload
-    status: str
 
 
 class TUserAccounts500Payload(TypedDict):
@@ -43,10 +44,8 @@ class TUserAccounts500Payload(TypedDict):
     code: str
 
 
-class TUserAccounts500(TypedDict):
-    trackingId: str
+class TUserAccounts500(TBaseResponse):
     payload: TUserAccounts500Payload
-    status: str
 
 
 TUserAccounts = Union[TUserAccounts200, TUserAccounts500]
@@ -229,8 +228,52 @@ class TOperationsPayload(TypedDict):
     ]]
 
 
-class TOperations(TypedDict):
+class TOperations(TBaseResponse):
     """ Операции счета """
-    trackingId: str
     payload: TOperationsPayload
-    status: str
+
+
+class TPortfolioPayloadPositionExpectedYield(TypedDict):
+    currency: str
+    value: float
+
+
+class TPortfolioPayloadPositionAveragePositionPrice(TypedDict):
+    currency: str
+    value: float
+
+
+class TPortfolioPayloadPosition(TypedDict):
+    figi: str
+    ticker: str
+    isin: str
+    instrumentType: str
+    balance: int
+    lots: int
+    expectedYield: TPortfolioPayloadPositionExpectedYield
+    averagePositionPrice: TPortfolioPayloadPositionAveragePositionPrice
+    name: str
+
+
+class TPortfolioPayload(TypedDict):
+    positions: List[TPortfolioPayloadPosition]
+
+
+class TPortfolio(TBaseResponse):
+    """ Портфолио """
+    payload: TPortfolioPayload
+
+
+class TPortfolioCurrenciesPayloadCurrencies(TypedDict):
+    currency: str
+    balance: float
+
+
+class TPortfolioCurrenciesPayload(TypedDict):
+    currencies: List[TPortfolioCurrenciesPayloadCurrencies]
+
+
+class TPortfolioCurrencies(TBaseResponse):
+    """ Валютные активы """
+    payload: TPortfolioCurrenciesPayload
+

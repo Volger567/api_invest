@@ -49,4 +49,4 @@ def percent_profit_format(operations):
     elif income < expense:
         percent_profit = (1-(expense/income))*100
         return f'{percent_profit:.2f}'
-    return '0'
+    return 0

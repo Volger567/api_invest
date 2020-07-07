@@ -1,4 +1,6 @@
 from django.db import models
+from django.db.models import Sum, F, Q, Case, When
+from django.db.models.functions import Coalesce
 
 
 class Currency(models.Model):
@@ -94,6 +96,45 @@ class Transaction(models.Model):
     price = models.DecimalField(verbose_name='Цена/шт.', max_digits=20, decimal_places=4)
 
 
+class DealQuerySet(models.QuerySet):
+    _sell_filter = Q(operation__type=Operation.Types.SELL)
+    _buy_filter = Q(operation__type__in=(Operation.Types.BUY, Operation.Types.BUY_CARD))
+
+    def _with_buys_sells_annotations(self):
+        return self.annotate(
+            sells=Coalesce(Sum('operation__quantity', filter=self._sell_filter), 0),
+            buys=Coalesce(Sum('operation__quantity', filter=self._buy_filter), 0)
+        )
+
+    def opened(self):
+        return self._with_buys_sells_annotations().filter(~Q(sells=F('buys')) | Q(buys=0) | Q(sells=0))
+
+    def closed(self):
+        return self._with_buys_sells_annotations().filter(Q(sells=F('buys')) & ~Q(buys=0) & ~Q(sells=0))
+
+    def with_closed_annotations(self):
+        return self._with_buys_sells_annotations().annotate(
+            is_closed=Case(
+                When(Q(sells=F('buys')) & ~Q(buys=0) & ~Q(sells=0), then=True),
+                default=False, output_field=models.BooleanField()
+            )
+        )
+
+
+class DealManager(models.Manager):
+    def get_queryset(self):
+        return DealQuerySet(self.model, using=self._db)
+
+    def closed(self):
+        return self.get_queryset().closed()
+
+    def opened(self):
+        return self.get_queryset().opened()
+
+    def with_closed_annotations(self):
+        return self.get_queryset().with_closed_annotations()
+
+
 class Deal(models.Model):
     """
         Набор операций для одной компании/фонда и т.д.
@@ -104,14 +145,15 @@ class Deal(models.Model):
         verbose_name = 'Сделка'
         verbose_name_plural = 'Сделки'
 
+    objects = DealManager()
+
     figi = models.ForeignKey('Stock', verbose_name='Ценная бумага', on_delete=models.PROTECT)
     investment_account = models.ForeignKey(
         'users.InvestmentAccount', verbose_name='Инвестиционный счет', on_delete=models.CASCADE
     )
-    is_closed = models.BooleanField(verbose_name='Закрыта сделка?', default=False)
 
     def __str__(self):
-        return f'{self.figi} ({self.is_closed})'
+        return str(self.figi)
 
 
 class Stock(models.Model):

@@ -1,6 +1,7 @@
 {% extends 'base.html' %}
 {% load static %}
-{% load math_filters %}
+{% load custom_filters %}
+{% load custom_tags %}
 
 
 {% block link %}
@@ -11,13 +12,55 @@
   <div class="text-center">
     {% if closed_deals or opened_deals %}
       <ul class="deals list-group list-group-flush m-auto">
-      <h2>Открытые сделки</h2>
-      <!-- Открытые сделки -->
-      {% for deal in opened_deals %}
-        <li class="deal-item list-group-item text-left">
-          <div class="float-left">
+      {% if opened_deals %}
+        <h2>Открытые сделки</h2>
+        {% if 'figi=' in request.get_full_path %}
+          <a href="{% url 'deals' %}" style="text-decoration: none">Сбросить фильтры</a>
+        {% endif %}
+        <!-- Открытые сделки -->
+        {% for deal in opened_deals %}
+          <li class="deal-item list-group-item text-left">
+            <div class="float-left">
+                <span class="deal-item-is-closed float-left">
+                  {{ deal.earliest_operation_date|date:"d/m/y H:m" }}
+                </span>
+                <br>
+                <span class="operation-item-type float-left">
+                  {{ operation.friendly_type_format }}
+                  {% if operation.quantity %}
+                    (Лотов: {{ operation.quantity|div:operation.figi.lot }})
+                  {% endif %}
+                </span>
+              </div>
+              <div class="float-right text-right">
+                <!-- Профит -->
+                <div class="deal-item-profit">
+                  {% expected_profit deal.figi.figi %}<span class="deal-item-profit-abbreviation">{{ deal.operation_set.all.0.currency.abbreviation }}</span>
+                </div>
+                <!-- Профит в % -->
+                <span class="deal-item-percent-profit">
+                  {% expected_percent_profit deal.figi.figi %}<span class="deal-item-percent-profit-abbreviation">%</span>
+                </span>
+                <!-- Ценная бумага -->
+                <br>
+                <div class="deal-item-figi">
+                  <a href="{% url 'deals' %}?figi={{ deal.figi.figi }}">{{ deal.figi.name }}</a>
+                </div>
+              </div>
+          </li>
+        {% endfor %}
+      {% endif %}
+      {% if closed_deals %}
+        <h2 class="mt-4">Закрытые сделки</h2>
+        {% if 'figi=' in request.get_full_path %}
+          <a href="{% url 'deals' %}" style="text-decoration: none">Сбросить фильтры</a>
+        {% endif %}
+        <!-- Закрытые сделки -->
+        {% for deal in closed_deals %}
+          <li class="deal-item list-group-item text-left {% if deal.profit < 0 %} expense {% else %} income {% endif %}">
+            <div class="float-left">
               <span class="deal-item-is-closed float-left">
-                {{ deal.earliest_operation_date|date:"d/m/y H:m" }}
+                {{ deal.earliest_operation_date|date:"d/m/y H:m" }} - {{ deal.latest_operation_date|date:"d/m/y H:m" }}<br>
               </span>
               <br>
               <span class="operation-item-type float-left">
@@ -28,48 +71,23 @@
               </span>
             </div>
             <div class="float-right text-right">
+              <!-- Профит -->
+              <div class="deal-item-profit">
+                {{ deal.profit|payment_format }}<span class="deal-item-profit-abbreviation">{{ deal.operation_set.all.0.currency.abbreviation }}</span>
+              </div>
+              <!-- Профит в % -->
+              <span class="deal-item-percent-profit">
+                {{ deal.operation_set|percent_profit_format }}<span class="deal-item-percent-profit-abbreviation">%</span>
+              </span>
               <!-- Ценная бумага -->
               <br>
               <div class="deal-item-figi">
                 <a href="{% url 'deals' %}?figi={{ deal.figi.figi }}">{{ deal.figi.name }}</a>
               </div>
             </div>
-        </li>
-      {% endfor %}
-
-      <h2 class="mt-4">Закрытые сделки</h2>
-      <!-- Закрытые сделки -->
-      {% for deal in closed_deals %}
-        <li class="deal-item list-group-item text-left {% if deal.profit < 0 %} expense {% else %} income {% endif %}">
-          <div class="float-left">
-            <span class="deal-item-is-closed float-left">
-              {{ deal.earliest_operation_date|date:"d/m/y H:m" }} - {{ deal.latest_operation_date|date:"d/m/y H:m" }}<br>
-            </span>
-            <br>
-            <span class="operation-item-type float-left">
-              {{ operation.friendly_type_format }}
-              {% if operation.quantity %}
-                (Лотов: {{ operation.quantity|div:operation.figi.lot }})
-              {% endif %}
-            </span>
-          </div>
-          <div class="float-right text-right">
-            <!-- Профит -->
-            <div class="deal-item-profit">
-              {{ deal.profit|payment_format }}<span class="deal-item-profit-abbreviation">{{ deal.operation_set.all.0.currency.abbreviation }}</span>
-            </div>
-            <!-- Профит в % -->
-            <span class="deal-item-percent-profit">
-              {{ deal.operation_set|percent_profit_format }}<span class="deal-item-percent-profit-abbreviation">%</span>
-            </span>
-            <!-- Ценная бумага -->
-            <br>
-            <div class="deal-item-figi">
-              <a href="{% url 'deals' %}?figi={{ deal.figi.figi }}">{{ deal.figi.name }}</a>
-            </div>
-          </div>
-        </li>
-      {% endfor %}
+          </li>
+        {% endfor %}
+      {% endif %}
       </ul>
     {% else %}
       <h4>У вас нет сделок :(</h4>

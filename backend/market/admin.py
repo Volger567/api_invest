@@ -16,8 +16,16 @@ class TransactionAdmin(admin.ModelAdmin):
 
 
 class DealAdmin(admin.ModelAdmin):
-    list_display = ('investment_account', 'figi', 'operations_count', 'is_closed')
-    ordering = ('is_closed', 'figi')
+    list_display = ('investment_account', 'figi', 'operations_count', '_is_closed')
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).with_closed_annotations().order_by('is_closed', 'figi')
+
+    def _is_closed(self, obj):
+        return obj.is_closed
+    _is_closed.admin_order_field = 'is_closed'
+    _is_closed.short_description = 'Сделка закрыта?'
+    _is_closed.boolean = True
 
     def operations_count(self, instance):
         return instance.operation_set.count()

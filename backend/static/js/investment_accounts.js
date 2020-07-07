@@ -44,11 +44,7 @@ $(document).ready(function() {
         'value': item.data('uuid')
       },
       success: function() {
-        investment_accounts.removeClass('default-investment-account')
-        investment_accounts.children('.default-investment-account-mark').addClass('invisible')
-        item.addClass('default-investment-account')
-        item.children('.default-investment-account-mark').removeClass('invisible')
-        $('.default-investment-account-fixed-label').text(item.children('.investment-account-name').text())
+        window.location.reload()
       }
     })
   })

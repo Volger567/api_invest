@@ -33,6 +33,12 @@ class Command(BaseCommand):
                 'abbreviation': chr(36),
                 'number_to_basic': 100,
                 'name': 'Американский доллар'
+            },
+            {
+                'iso_code': 'EUR',
+                'abbreviation': chr(8364),
+                'number_to_basic': 100,
+                'name': 'Евро'
             }
         )
 

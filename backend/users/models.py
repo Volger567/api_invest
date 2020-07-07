@@ -103,6 +103,7 @@ class InvestmentAccount(models.Model):
 
         # Создание сделок
         operations = Operation.objects.filter(
+            investment_account=self,
             date__range=(from_datetime, to_datetime),
             deal__isnull=True,
             type__in=(
@@ -110,25 +111,16 @@ class InvestmentAccount(models.Model):
                 Operation.Types.DIVIDEND, Operation.Types.SELL,
             )
         ).order_by('date')
-        # FIXME: оптимизировать запрос
         for operation in operations:
             if operation.type in (Operation.Types.BUY, Operation.Types.BUY_CARD):
-                deal, _ = Deal.objects.get_or_create(
+                deal, _ = Deal.objects.opened().get_or_create(
                     investment_account=self,
-                    is_closed=False,
                     figi=operation.figi
                 )
                 deal.operation_set.add(operation)
             elif operation.type == Operation.Types.SELL:
-                deal = Deal.objects.get(investment_account=self, is_closed=False, figi=operation.figi)
+                deal = Deal.objects.opened().get(investment_account=self, figi=operation.figi)
                 deal.operation_set.add(operation)
-                buy_operations = deal.operation_set.filter(type__in=(Operation.Types.BUY, Operation.Types.BUY_CARD))
-                sell_operations = deal.operation_set.filter(type=Operation.Types.SELL)
-                res = buy_operations.aggregate(
-                    s=Sum('quantity'))['s'] - sell_operations.aggregate(s=Sum('quantity'))['s']
-                if res == 0:
-                    deal.is_closed = True
-                    deal.save()
             else:
                 deal = (
                     Deal.objects
@@ -138,8 +130,44 @@ class InvestmentAccount(models.Model):
                 )
                 deal.operation_set.add(operation)
 
+    def update_currency_assets(self):
+        """ Обновить валютные активы в портфеле"""
+        with TinkoffProfile(self.token) as tp:
+            currency_actives = tp.portfolio_currencies()['payload']['currencies']
+        self.currency_assets.exclude(currency__iso_code__in=[c['currency'] for c in currency_actives]).delete()
+        for currency in currency_actives:
+            obj, created = CurrencyAsset.objects.get_or_create(
+                investment_account=self,
+                currency=Currency.objects.get(iso_code__iexact=currency['currency']),
+                defaults={
+                    'value': currency['balance']
+                }
+            )
+            if not created:
+                obj.value = currency['balance']
+                obj.save(update_fields=['value'])
+
+    def update_all(self, now):
+        update_frequency = datetime.timedelta(seconds=30)
+        if now - self.operations_sync_at > update_frequency:
+            self.update_currency_assets()
+            self.update_operations()
+
     def __str__(self):
         return f'{self.name} ({self.broker_account_id})'
+
+
+class CurrencyAsset(models.Model):
+    """ Валютный актив в портфеле """
+    class Meta:
+        verbose_name = 'Валютный актив'
+        verbose_name_plural = 'Валютные активы'
+        ordering = ('currency', )
+
+    investment_account = models.ForeignKey(
+        InvestmentAccount, verbose_name='Инвестиционный счет', on_delete=models.CASCADE, related_name='currency_assets')
+    currency = models.ForeignKey(Currency, verbose_name='Валюта', on_delete=models.PROTECT)
+    value = models.DecimalField(verbose_name='Количество', max_digits=20, decimal_places=4, default=0)
 
 
 @receiver(post_save, sender=InvestmentAccount)

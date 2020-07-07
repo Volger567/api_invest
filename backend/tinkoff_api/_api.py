@@ -5,7 +5,7 @@ from urllib.parse import urljoin
 
 import requests
 
-from tinkoff_api.annotations import TMarketStocks, TUserAccounts200, TOperations
+from tinkoff_api.annotations import TMarketStocks, TUserAccounts200, TOperations, TPortfolio, TPortfolioCurrencies
 from tinkoff_api.exceptions import PermissionDeniedError, UnauthorizedError, UnknownError, InvalidArgumentError, \
     InvalidTokenError
 
@@ -133,13 +133,7 @@ class TinkoffProfile:
     @only_authorized
     @generate_url
     def market_stocks(self, url: str) -> TMarketStocks:
-        response = self._session.get(url)
-        if response.status_code == 200:
-            return response.json()
-        elif response.status_code in (401, 500):
-            raise UnauthorizedError('Токен не действителен')
-        else:
-            raise UnknownError(f'Неизвестный status_code запроса: {response.status_code}')
+        return self.response_to_json(self._session.get(url))
 
     @only_authorized
     @generate_url
@@ -153,12 +147,25 @@ class TinkoffProfile:
         if not (callable(getattr(from_datetime, 'isoformat', None)) and
                 callable(getattr(to_datetime, 'isoformat', None))):
             raise InvalidArgumentError('Аргументы from_datetime и to_datetime должны иметь метод isoformat')
-        response = self._session.get(
+        response = self.response_to_json(self._session.get(
             url, data={
                 'from': from_datetime.isoformat(),
                 'to': to_datetime.isoformat()
             }
-        )
+        ))
+        return response
+
+    @only_authorized
+    @generate_url
+    def portfolio(self, url: str) -> TPortfolio:
+        return self.response_to_json(self._session.get(url))
+
+    @only_authorized
+    @generate_url
+    def portfolio_currencies(self, url: str) -> TPortfolioCurrencies:
+        return self.response_to_json(self._session.get(url))
+
+    def response_to_json(self, response):
         if response.status_code == 200:
             return response.json()
         elif response.status_code in (401, 500):
