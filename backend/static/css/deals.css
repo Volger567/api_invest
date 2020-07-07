@@ -14,7 +14,11 @@
   background-color: rgba(255, 100, 165, .2);
   border-left: 3px double red;
 }
-
+.deal-item-lots {
+  font-size: .8em;
+  color: rgba(10, 10, 50, .7);
+  font-weight: bold;
+}
 /* Закрыта ли сделка */
 .deal-item-is-closed {
   color: rgba(20, 80, 150, .9);

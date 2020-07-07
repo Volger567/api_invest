@@ -19,32 +19,29 @@
         {% endif %}
         <!-- Открытые сделки -->
         {% for deal in opened_deals %}
-          <li class="deal-item list-group-item text-left">
+          <li class="deal-item list-group-item text-left {% if deal.expected_profit > 0 %} income {% else %} expense {% endif %}">
             <div class="float-left">
                 <span class="deal-item-is-closed float-left">
                   {{ deal.earliest_operation_date|date:"d/m/y H:m" }}
                 </span>
                 <br>
-                <span class="operation-item-type float-left">
-                  {{ operation.friendly_type_format }}
-                  {% if operation.quantity %}
-                    (Лотов: {{ operation.quantity|div:operation.figi.lot }})
-                  {% endif %}
+                <span class="deal-item-lots float-left">
+                  Лотов осталось: {{ deal.lots_left }}
                 </span>
               </div>
               <div class="float-right text-right">
                 <!-- Профит -->
                 <div class="deal-item-profit">
-                  {% expected_profit deal.figi.figi %}<span class="deal-item-profit-abbreviation">{{ deal.operation_set.all.0.currency.abbreviation }}</span>
+                  {% if deal.expected_profit > 0 %}+{% endif %}{{ deal.expected_profit|floatformat:2 }}<span class="deal-item-profit-abbreviation">{{ deal.abbreviation }}</span>
                 </div>
                 <!-- Профит в % -->
                 <span class="deal-item-percent-profit">
-                  {% expected_percent_profit deal.figi.figi %}<span class="deal-item-percent-profit-abbreviation">%</span>
+                  {{ deal.expected_percent_profit|floatformat:2 }}<span class="deal-item-percent-profit-abbreviation">%</span>
                 </span>
                 <!-- Ценная бумага -->
                 <br>
                 <div class="deal-item-figi">
-                  <a href="{% url 'deals' %}?figi={{ deal.figi.figi }}">{{ deal.figi.name }}</a>
+                  <a href="{% url 'deals' %}?figi={{ deal.figi_figi }}">{{ deal.figi_name }}</a>
                 </div>
               </div>
           </li>

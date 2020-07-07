@@ -1,6 +1,6 @@
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import ObjectDoesNotExist
-from django.db.models import Max, Sum, Min
+from django.db.models import Max, Sum, Min, F, Subquery, OuterRef
 from django.utils import timezone
 from django.views.generic import TemplateView, ListView
 
@@ -59,21 +59,41 @@ class DealsView(LoginRequiredMixin, UpdateInvestmentAccount, TemplateView):
             queryset = Deal.objects.filter(investment_account=self.investment_account, figi=figi_object)
 
         context = super().get_context_data(**kwargs)
-        context['opened_deals'] = (
-            queryset.opened().annotate(earliest_operation_date=Min('operation__date'))
+        opened_deals = list(
+            queryset.opened()
+            .annotate(
+                earliest_operation_date=Min('operation__date'),
+                figi_name=F('figi__name'),
+                figi_figi=F('figi__figi'),
+                abbreviation=Subquery(
+                    Operation.objects.filter(deal=OuterRef('pk')).values('currency__abbreviation')[:1]
+                )
+            )
             .order_by('-earliest_operation_date')
-        ).select_related('figi').distinct()
-
+            .values()
+        )
+        if self.investment_account:
+            with TinkoffProfile(self.investment_account.token) as tp:
+                portfolio = tp.portfolio()['payload']['positions']
+                portfolio = {i['figi']: i for i in portfolio}
+            for deal in opened_deals:
+                figi_figi = deal['figi_figi']
+                asset = portfolio[figi_figi]
+                price = asset['averagePositionPrice']['value'] * asset['balance']
+                expected_price = price + asset['expectedYield']['value']
+                if price < expected_price:
+                    deal['expected_percent_profit'] = ((expected_price / price)-1)*100
+                else:
+                    deal['expected_percent_profit'] = -(1-(expected_price/price))*100
+                deal['expected_profit'] = asset['expectedYield']['value']
+                deal['lots_left'] = asset['lots']
+        context['opened_deals'] = opened_deals
         context['closed_deals'] = (
             queryset.closed()
             .annotate(latest_operation_date=Max('operation__date'), earliest_operation_date=Min('operation__date'))
             .annotate(profit=Sum('operation__payment')+Sum('operation__commission'))
             .order_by('-latest_operation_date')
         ).select_related('figi').distinct()
-        # FIXME: оптимизировать
-        if self.investment_account:
-            with TinkoffProfile(self.investment_account.token) as tp:
-                context['portfolio'] = tp.portfolio()['payload']['positions']
         return context
 
 
