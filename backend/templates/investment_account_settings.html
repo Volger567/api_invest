@@ -1,0 +1,55 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block link %}
+  <link rel="stylesheet" href="{% static 'css/investment_account_settings.css' %}">
+{% endblock %}
+
+
+{% block content %}
+
+  <div class="text-center">
+  {% if request.user.default_investment_account and request.user.default_investment_account.creator == request.user %}
+    <h3>Счет: {{ request.user.default_investment_account.name }}({{ request.user.default_investment_account.broker_account_id }})</h3>
+    <form class="m-auto w-50 text-left">
+      <div class="form-group setting-item">
+        <label for="capital-sharing">Принцип разделения капитала</label>
+        <select class="form-control" id="capital-sharing" disabled>
+        {% if request.user.default_investment_account.capital_sharing_principle == 'abs' %}
+          <option value="abs" selected>Абсолютный</option>
+          <option value="rel">Относительный</option>
+        {% else %}
+          <option value="rel" selected>Относительный</option>
+          <option value="abs">Абсолютный</option>
+        {% endif %}
+        </select>
+      </div>
+
+      <div class="form-group setting-item">
+        <label for="co-owners">Владельцы счета</label>
+        <div id="co-owners">
+          <button class="btn btn-primary m-1" disabled>{{ request.user.username }}</button>
+        {% for owner in request.user.default_investment_account.co_owners.all %}
+          <button class="btn btn-primary m-1 remove-co-owner-btn"><span>{{ owner.username }}</span></button>
+        {% endfor %}
+        </div>
+      </div>
+
+      <div class="form-group setting-item">
+        <label for="add-co-owners">Добавление совладельцев</label><br>
+        <input type="text" id="add-co-owners" class="w-100" placeholder=" Имя пользователя">
+        <div id="found-investors" class="mt-3">
+
+        </div>
+      </div>
+    </form>
+    <button class="btn btn-primary w-25 mt-5">Сохранить</button>
+  {% else %}
+    <h3><a href="{% url 'investment_accounts' %}" style="text-decoration: none">Выберите</a> счет, владельцем которого вы являетесь</h3>
+  {% endif %}
+  </div>
+{% endblock %}
+
+{% block body_script %}
+  <script src="{% static 'js/investment_account_settings.js' %}"></script>
+{% endblock %}

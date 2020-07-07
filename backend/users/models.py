@@ -148,13 +148,13 @@ class InvestmentAccount(models.Model):
                 obj.save(update_fields=['value'])
 
     def update_all(self, now):
-        update_frequency = datetime.timedelta(seconds=30)
+        update_frequency = datetime.timedelta(seconds=60)
         if now - self.operations_sync_at > update_frequency:
             self.update_currency_assets()
             self.update_operations()
 
     def __str__(self):
-        return f'{self.name} ({self.broker_account_id})'
+        return f'{self.name} ({self.creator})'
 
 
 class CurrencyAsset(models.Model):

@@ -11,18 +11,18 @@
   <h2>Ваши инвестиционные счета</h2>
 
   {% if owned_investment_accounts %}
-    <ul class="list-group w-50 mx-auto owned-investment-accounts investment-accounts">
+    <ul class="list-group w-50 m-auto owned-investment-accounts investment-accounts">
       {% for account in owned_investment_accounts %}
         {% if request.user.default_investment_account == account %}
           <li class="list-group-item default-investment-account mb-2" data-uuid="{{ account.pk }}">
             <span class="float-left remove-investment-account">&times;</span>
-            <span class="investment-account-name">{{ account }}</span>
+            <span class="investment-account-name">{{ account.name }}</span>
             <span class="float-right default-investment-account-mark">&#171;</span>
           </li>
         {% else %}
           <li class="list-group-item mb-2" data-uuid="{{ account.pk }}">
             <span class="float-left remove-investment-account">&times;</span>
-            <span class="investment-account-name">{{ account }}</span>
+            <span class="investment-account-name">{{ account.name }}</span>
             <span class="float-right default-investment-account-mark invisible">&#171;</span>
           </li>
         {% endif %}
@@ -68,7 +68,7 @@
               </div>
               <div class="form-group text-left">
                 <label for="add-owned-investment-account-modal-capital-sharing-type">Тип разделения капитала</label>
-                <select class="form-control" id="add-owned-investment-account-modal-capital-sharing-type">
+                <select class="form-control" id="add-owned-investment-account-modal-capital-sharing-type" disabled>
                   <option value="abs" selected>Абсолютное разделение</option>
                   <option value="rel">Относительное разделение</option>
                 </select>
@@ -86,9 +86,13 @@
   <div class="co-owned-investment-accounts text-center">
   <h2>Ваши совместные инвестиционные счета</h2>
   {% if co_owned_investment_accounts %}
-    <ul class="list-group">
-      {% for account in owned_investment_accounts %}
-        <li class="list-group-item">{{ account.name }}</li>
+    <ul class="list-group investment-accounts w-50 m-auto">
+      {% for account in co_owned_investment_accounts.all %}
+        {% if account == request.user.default_investment_account %}
+          <li class="list-group-item mb-2 co-owned-investment-account default-investment-account" data-uuid="{{ account.pk }}">{{ account }}</li>
+        {% else %}
+          <li class="list-group-item mb-2 co-owned-investment-account" data-uuid="{{ account.pk }}">{{ account }}</li>
+        {% endif %}
       {% endfor %}
     </ul>
   {% else %}

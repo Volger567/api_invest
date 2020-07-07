@@ -1,0 +1,11 @@
+.setting-item {
+  margin-top: 40px;
+  text-align: left;
+}
+
+.remove-co-owner-btn:hover:before {
+  content: 'Удалить?';
+}
+.remove-co-owner-btn:hover span {
+  display: none;
+}
