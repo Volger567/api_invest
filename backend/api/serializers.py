@@ -3,7 +3,7 @@ from rest_framework.exceptions import ValidationError
 
 from tinkoff_api import TinkoffProfile
 from tinkoff_api.exceptions import InvalidTokenError
-from users.models import InvestmentAccount, Investor
+from users.models import InvestmentAccount, Investor, CoOwner
 
 
 class InvestmentAccountSerializer(serializers.ModelSerializer):
@@ -34,3 +34,10 @@ class InvestorSerializer(serializers.ModelSerializer):
     class Meta:
         model = Investor
         fields = ('id', 'username')
+
+
+class CoOwnerSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CoOwner
+        fields = ('id', 'investor', 'investment_account', 'capital', 'share')
+

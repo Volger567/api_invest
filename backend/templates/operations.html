@@ -20,7 +20,7 @@
           {% endifchanged %}
           <li class="operation-item list-group-item text-left {% if operation.payment < 0 %} expense {% else %} income {% endif %}">
             <div class="float-left">
-              <span class="operation-item-date float-left">{{ operation.date|time }}</span>
+              <span class="operation-item-date float-left">{{ operation.date|date:"G:i:s" }}</span>
               <br>
               <span class="operation-item-type float-left">
                 {{ operation.friendly_type_format }}

@@ -7,8 +7,8 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.viewsets import ViewSet
 
-from api.serializers import InvestmentAccountSerializer, InvestorSerializer
-from users.models import InvestmentAccount, Investor
+from api.serializers import InvestmentAccountSerializer, InvestorSerializer, CoOwnerSerializer
+from users.models import InvestmentAccount, Investor, CoOwner
 
 
 class InvestmentAccountView(ListCreateAPIView):
@@ -26,10 +26,11 @@ class DefaultInvestmentAccountView(APIView):
         return Response({'value': request.user.defaul_investment_account.pk}, status=200)
 
     def post(self, request, *args, **kwargs):
+        """ Установка инвестиционного счета по умолчанию """
         try:
             investment_account = (
                 InvestmentAccount.objects
-                .filter(Q(creator=request.user) | Q(co_owners=request.user)).distinct()
+                .filter(Q(creator=request.user) | Q(co_owners__investor=request.user)).distinct()
                 .get(pk=request.POST.get('value'))
             )
             request.user.default_investment_account = investment_account
@@ -44,12 +45,14 @@ class SearchInvestorsView(ViewSet):
     permission_classes = (IsAuthenticated, )
 
     def retrieve(self, request):
+        """ Получение инвесторов по username для добавления в совладельцы """
         username = request.GET.get('username')
         queryset = (
             Investor.objects
             .filter(username__istartswith=username)
             .exclude(username=self.request.user.username)
-            .exclude(username__in=self.request.user.default_investment_account.co_owners.all().values('username'))
+            .exclude(username__in=self.request.user.default_investment_account.co_owners
+                     .all().values('investor__username'))
         )
         return Response(InvestorSerializer(queryset, many=True).data, status=status.HTTP_200_OK)
 
@@ -58,14 +61,19 @@ class CoOwnersView(APIView):
     permission_classes = (IsAuthenticated, )
 
     def post(self, request, *args, **kwargs):
+        """ Добавление совладельца """
         username = request.POST.get('username')
-        if username != self.request.user:
-            self.request.user.default_investment_account.co_owners.add(Investor.objects.get(username=username))
+        if username != self.request.user and not CoOwner.objects.filter(investor__username=username).exists():
+            CoOwner.objects.create(
+                investor=Investor.objects.get(username=username),
+                investment_account=self.request.user.default_investment_account
+            )
         return Response(status=status.HTTP_200_OK)
 
     def get(self, request, *args, **kwargs):
+        """ Получение совладельцев """
         response = {
             'owner': InvestorSerializer(self.request.user).data,
-            'co_owners': InvestorSerializer(self.request.user.default_investment_account.co_owners, many=True).data
+            'co_owners': CoOwnerSerializer(self.request.user.default_investment_account.co_owners, many=True).data
         }
         return Response(response, status=status.HTTP_200_OK)

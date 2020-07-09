@@ -1,5 +1,5 @@
 .setting-item {
-  margin-top: 40px;
+  margin-top: 50px;
   text-align: left;
 }
 
@@ -8,4 +8,22 @@
 }
 .remove-co-owner-btn:hover span {
   display: none;
+}
+.investment-account-settings-form {
+  width: 75%;
+}
+label[for="co-owners"] {
+  font-weight: bold;
+}
+label[for="co-owners"] span {
+  color: rgb(100, 170, 150)
+}
+.co-owners-table th:first-child {
+  width: 30%;
+}
+.co-owners-table th:nth-child(2) {
+  width: 20%;
+}
+.co-owners-table th:nth-child(3) {
+  width: 25%;
 }

@@ -34,6 +34,9 @@ class Operation(models.Model):
         verbose_name = 'Операция'
         verbose_name_plural = 'Операции'
         ordering = ('date', )
+        constraints = [
+            models.UniqueConstraint(fields=('type', 'date', 'investment_account'), name='unique operation')
+        ]
 
     class Statuses(models.TextChoices):
         DONE = 'Done', 'Выполнено'

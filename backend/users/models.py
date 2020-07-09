@@ -43,10 +43,9 @@ class InvestmentAccount(models.Model):
     )
     token = models.CharField(verbose_name='Токен для торговли', max_length=128)
     broker_account_id = models.CharField(verbose_name='ID инвестиционного счета', max_length=50)
-    operations_sync_at = models.DateTimeField(verbose_name='Время последней синхронизации', null=True)
-    co_owners = models.ManyToManyField(
-        Investor, verbose_name='Совладельцы',
-        related_name='co_owned_investor_accounts'
+    operations_sync_at = models.DateTimeField(
+        verbose_name='Время последней синхронизации',
+        default=datetime.datetime(1900, 1, 1, tzinfo=pytz.timezone(settings.TIME_ZONE))
     )
     capital_sharing_principle = models.CharField(
         verbose_name='Принцип разделения капитала',
@@ -59,13 +58,9 @@ class InvestmentAccount(models.Model):
         # TODO: отдать это celery
         with TinkoffProfile(self.token) as tp:
             project_timezone = pytz.timezone(settings.TIME_ZONE)
-            if self.operations_sync_at is None:
-                from_datetime = project_timezone.localize(datetime.datetime(1900, 1, 1))
-            else:
-                from_datetime = self.operations_sync_at
+            from_datetime = self.operations_sync_at - datetime.timedelta(hours=12)
             to_datetime = datetime.datetime.now(tz=pytz.timezone(settings.TIME_ZONE))
             operations = tp.operations(from_datetime, to_datetime)['payload']['operations']
-            self.operations_sync_at = to_datetime
         pre_bulk_create_operations = []
         commissions = {}
         currencies = Currency.objects.all()
@@ -74,7 +69,8 @@ class InvestmentAccount(models.Model):
             operation_date = project_timezone.localize(
                 dateutil.parser.isoparse(operation['date']).replace(tzinfo=None)
             )
-            if operation['operationType'] == 'BrokerCommission' and operation['status'] == Operation.Statuses.DONE:
+            if operation['operationType'] == Operation.Types.BROKER_COMMISSION and \
+                    operation['status'] == Operation.Statuses.DONE:
                 commissions[operation_date] = operation
             elif operation['status'] == Operation.Statuses.DONE:
                 pre_bulk_create_operations.append(
@@ -98,7 +94,7 @@ class InvestmentAccount(models.Model):
                 Operation(**operation, commission=commission)
             )
 
-        Operation.objects.bulk_create(bulk_create_operations)
+        Operation.objects.bulk_create(bulk_create_operations, ignore_conflicts=True)
         self.save(update_fields=('operations_sync_at', ))
 
         # Создание сделок
@@ -152,9 +148,23 @@ class InvestmentAccount(models.Model):
         if now - self.operations_sync_at > update_frequency:
             self.update_currency_assets()
             self.update_operations()
+            self.operations_sync_at = now
 
     def __str__(self):
         return f'{self.name} ({self.creator})'
+
+
+class CoOwner(models.Model):
+    class Meta:
+        verbose_name = 'Совладелец'
+        verbose_name_plural = 'Совладельцы'
+
+    investor = models.ForeignKey(
+        Investor, verbose_name='Совладелец', on_delete=models.CASCADE, related_name='co_owned_investor_accounts')
+    investment_account = models.ForeignKey(
+        InvestmentAccount, verbose_name='Инвестиционный счет', on_delete=models.CASCADE, related_name='co_owners')
+    capital = models.DecimalField(verbose_name='Капитал', max_digits=20, decimal_places=4, default=0)
+    share = models.DecimalField(verbose_name='Доля', max_digits=8, decimal_places=4, default=0)
 
 
 class CurrencyAsset(models.Model):
