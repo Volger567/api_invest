@@ -13,7 +13,6 @@ $(document).ready(function() {
       data: {
         'name': $('#add-owned-investment-account-modal-name').val(),
         'token': $('#add-owned-investment-account-modal-token').val(),
-        'capital_sharing_principle': $('#add-owned-investment-account-modal-capital-sharing-type').val()
       },
       success: function(){
         window.location.reload()

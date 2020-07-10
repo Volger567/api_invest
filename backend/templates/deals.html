@@ -70,11 +70,11 @@
             <div class="float-right text-right">
               <!-- Профит -->
               <div class="deal-item-profit">
-                {{ deal.profit|payment_format }}<span class="deal-item-profit-abbreviation">{{ deal.operation_set.all.0.currency.abbreviation }}</span>
+                {{ deal.profit|payment_format }}<span class="deal-item-profit-abbreviation">{{ deal.abbreviation }}</span>
               </div>
               <!-- Профит в % -->
               <span class="deal-item-percent-profit">
-                {{ deal.operation_set|percent_profit_format }}<span class="deal-item-percent-profit-abbreviation">%</span>
+                {{ deal.operations|percent_profit_format }}<span class="deal-item-percent-profit-abbreviation">%</span>
               </span>
               <!-- Ценная бумага -->
               <br>

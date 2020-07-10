@@ -19,7 +19,7 @@ class InvestorAdmin(UserAdmin):
 
 
 class InvestmentAccountAdmin(admin.ModelAdmin):
-    list_display = ('name', 'creator', 'broker_account_id', 'operations_sync_at', 'capital_sharing_principle')
+    list_display = ('name', 'creator', 'broker_account_id', 'sync_at')
 
 
 admin_site.register(Investor, InvestorAdmin)

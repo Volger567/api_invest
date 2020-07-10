@@ -72,8 +72,7 @@ class CoOwnersView(APIView):
 
     def get(self, request, *args, **kwargs):
         """ Получение совладельцев """
-        response = {
-            'owner': InvestorSerializer(self.request.user).data,
-            'co_owners': CoOwnerSerializer(self.request.user.default_investment_account.co_owners, many=True).data
-        }
+        response = CoOwnerSerializer(
+            self.request.user.default_investment_account.co_owners.with_is_creator_annotations().order_by('-is_creator')
+        ).data
         return Response(response, status=status.HTTP_200_OK)

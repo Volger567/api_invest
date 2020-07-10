@@ -18,73 +18,48 @@
       </div>
       <div class="form-group setting-item">
         <div id="co-owners">
-          <table class="table co-owners-table">
-            <caption style="caption-side: top">
-              Инвестор: {{ request.user.username }}
-            </caption>
-            <thead>
-              <tr class="table-primary text-center">
-                <th scope="col">Капитал</th>
-                <th scope="col">Доля</th>
-                <th scope="col">Лимит</th>
-                <th scope="col">В обороте</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr class="text-center">
-                <th class="co-owner-capital"><input type="number" class="form-control" value="{{ creator_capital|floatformat:2 }}" step="0.01" disabled></th>
-                <th class="co-owner-share"><input type="number" class="form-control" step="0.01" disabled value="1"></th>
-                <th class="co-owner-limit"></th>
-                <th class="co-owner-circulation"></th>
-              </tr>
-            </tbody>
-          </table>
-          {% for owner in request.user.default_investment_account.co_owners.all %}
+          {% for co_owner in co_owners %}
             <table class="table co-owners-table">
               <caption style="caption-side: top">
-                Инвестор: {{ owner.investor.username }}
+                Инвестор: {{ co_owner.investor.username }}
               </caption>
               <thead>
                 <tr class="table-primary text-center">
-                  <th scope="col">Капитал</th>
+                  <th scope="col">Собственный капитал</th>
                   <th scope="col">Доля</th>
-                  <th scope="col">Лимит</th>
+                  <th scope="col">Лимит портфеля</th>
                   <th scope="col">В обороте</th>
                 </tr>
               </thead>
               <tbody>
                 <tr class="text-center">
-                  <th class="co-owner-capital"><input type="number" class="form-control" min="0" max="{{ total_pay_in }}" data-target="{{ owner.pk }}" value="{{ owner.capital|floatformat:2 }}" step="0.01"></th>
-                  <th class="co-owner-share"><input type="number" class="form-control" min="0" data-target="{{ owner.pk }}" value="{{ owner.share|floatformat:2 }}" step="0.01"></th>
-                  <th class="co-owner-limit"></th>
+                  <th class="co-owner-capital">
+                    <input type="number" class="form-control" min="0" max="{{ total_pay_in }}"
+                           data-target="{{ co_owner.pk }}" value="{{ co_owner.capital|floatformat:2 }}" step="0.01">
+                  </th>
+                  <th class="co-owner-default-share">
+                    <input type="number" class="form-control" min="0"
+                           data-target="{{ co_owner.pk }}" value="{{ co_owner.default_share|floatformat:2 }}" step="0.01">
+                  </th>
+                  <th class="co-owner-limit">{{ co_owner.limit|floatformat:2 }}</th>
                   <th class="co-owner-circulation"></th>
                 </tr>
               </tbody>
             </table>
             {% endfor %}
-          <button class="btn btn-primary w-100">Сохранить</button>
         </div>
       </div>
 
       <div class="form-group setting-item">
-        <div class="float-left">
-          <label for="add-co-owners">Добавление совладельцев</label><br>
-          <input type="text" id="add-co-owners" placeholder=" Имя пользователя" autocomplete="false">
+        <div class="float-left w-50">
+{#          <label for="add-co-owners">Добавление совладельцев</label><br>#}
+          <input type="text" class="w-100" id="add-co-owners" placeholder="Для добавления совладельца, введите его имя" autocomplete="off">
           <div id="found-investors" class="mt-3">
 
           </div>
         </div>
-        <div class="float-right">
-          <label for="capital-sharing">Принцип разделения капитала</label>
-          <select class="form-control" id="capital-sharing" disabled>
-          {% if request.user.default_investment_account.capital_sharing_principle == 'abs' %}
-            <option value="abs" selected>Абсолютный</option>
-            <option value="rel">Относительный</option>
-          {% else %}
-            <option value="rel" selected>Относительный</option>
-            <option value="abs">Абсолютный</option>
-          {% endif %}
-          </select>
+        <div class="float-right w-50 text-right">
+          <button class="btn btn-primary w-75">Сохранить</button>
         </div>
       </div>
     </form>

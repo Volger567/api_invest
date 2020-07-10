@@ -56,7 +56,8 @@ class Operation(models.Model):
         TAX_DIVIDEND = 'TaxDividend', 'Налог на дивиденды'
 
     investment_account = models.ForeignKey(
-        'users.InvestmentAccount', verbose_name='Инвестиционный счет', on_delete=models.CASCADE
+        'users.InvestmentAccount', verbose_name='Инвестиционный счет', on_delete=models.CASCADE,
+        related_name='operations'
     )
     type = models.CharField(verbose_name='Тип', max_length=30, choices=Types.choices)
     date = models.DateTimeField(verbose_name='Дата')
@@ -74,7 +75,9 @@ class Operation(models.Model):
 
     commission = models.DecimalField(verbose_name='Комиссия', max_digits=16, decimal_places=4, null=True)
 
-    deal = models.ForeignKey('Deal', verbose_name='Сделка', on_delete=models.SET_NULL, null=True)
+    deal = models.ForeignKey(
+        'Deal', verbose_name='Сделка', on_delete=models.SET_NULL,
+        null=True, related_name='operations')
 
     @property
     def friendly_type_format(self):
@@ -82,6 +85,20 @@ class Operation(models.Model):
 
     def __str__(self):
         return f'{self.friendly_type_format} ({self.investment_account} - {self.date})'
+
+
+class Share(models.Model):
+    """ Отражает долю совладельца в каждой операции """
+    class Meta:
+        verbose_name = 'Доля в операции'
+        verbose_name_plural = 'Доли в операциях'
+        constraints = [
+            models.UniqueConstraint(fields=('operation', 'co_owner'), name='unique_co_owner_op')
+        ]
+
+    operation = models.ForeignKey(Operation, verbose_name='Операция', on_delete=models.CASCADE)
+    co_owner = models.ForeignKey('users.CoOwner', verbose_name='Совладелец', on_delete=models.CASCADE)
+    value = models.DecimalField(verbose_name='Доля', max_digits=8, decimal_places=4)
 
 
 class Transaction(models.Model):
@@ -92,6 +109,9 @@ class Transaction(models.Model):
     class Meta:
         verbose_name = 'Транзакции'
         verbose_name_plural = 'Транзакции'
+        constraints = [
+            models.UniqueConstraint(fields=['secondary_id'], condition=~Q(secondary_id='-1'), name='unique_sec_id')
+        ]
 
     secondary_id = models.CharField(verbose_name='ID', max_length=32)
     date = models.DateTimeField(verbose_name='Дата')
@@ -100,13 +120,13 @@ class Transaction(models.Model):
 
 
 class DealQuerySet(models.QuerySet):
-    _sell_filter = Q(operation__type=Operation.Types.SELL)
-    _buy_filter = Q(operation__type__in=(Operation.Types.BUY, Operation.Types.BUY_CARD))
+    _sell_filter = Q(operations__type=Operation.Types.SELL)
+    _buy_filter = Q(operations__type__in=(Operation.Types.BUY, Operation.Types.BUY_CARD))
 
     def _with_buys_sells_annotations(self):
         return self.annotate(
-            sells=Coalesce(Sum('operation__quantity', filter=self._sell_filter), 0),
-            buys=Coalesce(Sum('operation__quantity', filter=self._buy_filter), 0)
+            sells=Coalesce(Sum('operations__quantity', filter=self._sell_filter), 0),
+            buys=Coalesce(Sum('operations__quantity', filter=self._buy_filter), 0)
         )
 
     def opened(self):
@@ -152,7 +172,8 @@ class Deal(models.Model):
 
     figi = models.ForeignKey('Stock', verbose_name='Ценная бумага', on_delete=models.PROTECT)
     investment_account = models.ForeignKey(
-        'users.InvestmentAccount', verbose_name='Инвестиционный счет', on_delete=models.CASCADE
+        'users.InvestmentAccount', verbose_name='Инвестиционный счет', on_delete=models.CASCADE,
+        related_name='deals'
     )
 
     def __str__(self):

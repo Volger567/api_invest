@@ -61,7 +61,7 @@ class DealsView(LoginRequiredMixin, UpdateInvestmentAccount, TemplateView):
         opened_deals = list(
             queryset.opened()
             .annotate(
-                earliest_operation_date=Min('operation__date'),
+                earliest_operation_date=Min('operations__date'),
                 figi_name=F('figi__name'),
                 figi_figi=F('figi__figi'),
                 abbreviation=Subquery(
@@ -89,8 +89,13 @@ class DealsView(LoginRequiredMixin, UpdateInvestmentAccount, TemplateView):
         context['opened_deals'] = opened_deals
         context['closed_deals'] = (
             queryset.closed()
-            .annotate(latest_operation_date=Max('operation__date'), earliest_operation_date=Min('operation__date'))
-            .annotate(profit=Sum('operation__payment')+Sum('operation__commission'))
+            .annotate(
+                latest_operation_date=Max('operations__date'),
+                earliest_operation_date=Min('operations__date'),
+                abbreviation=Subquery(
+                    Operation.objects.filter(deal=OuterRef('pk')).values('currency__abbreviation')[:1]
+                ),
+                profit=Sum('operations__payment')+Sum('operations__commission'))
             .order_by('-latest_operation_date')
         ).select_related('figi').distinct()
         return context

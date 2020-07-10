@@ -1,4 +1,5 @@
 from django.contrib import admin
+from django.db.models import Count
 
 from market.models import Currency, Operation, Transaction, Deal, Stock
 
@@ -19,7 +20,12 @@ class DealAdmin(admin.ModelAdmin):
     list_display = ('investment_account', 'figi', 'operations_count', '_is_closed')
 
     def get_queryset(self, request):
-        return super().get_queryset(request).with_closed_annotations().order_by('is_closed', 'figi')
+        return (
+            super().get_queryset(request)
+            .with_closed_annotations()
+            .annotate(operations_count=Count('operations'))
+            .order_by('is_closed', 'figi')
+        )
 
     def _is_closed(self, obj):
         return obj.is_closed
@@ -28,7 +34,7 @@ class DealAdmin(admin.ModelAdmin):
     _is_closed.boolean = True
 
     def operations_count(self, instance):
-        return instance.operation_set.count()
+        return instance.operations_count
     operations_count.short_description = 'Количество операций'
 
 

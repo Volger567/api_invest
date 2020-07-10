@@ -9,7 +9,7 @@ from users.models import InvestmentAccount, Investor, CoOwner
 class InvestmentAccountSerializer(serializers.ModelSerializer):
     class Meta:
         model = InvestmentAccount
-        fields = ('id', 'name', 'creator', 'token', 'broker_account_id', 'capital_sharing_principle')
+        fields = ('id', 'name', 'creator', 'token', 'broker_account_id')
 
     creator = serializers.PrimaryKeyRelatedField(read_only=True)
     broker_account_id = serializers.ReadOnlyField()
@@ -39,5 +39,5 @@ class InvestorSerializer(serializers.ModelSerializer):
 class CoOwnerSerializer(serializers.ModelSerializer):
     class Meta:
         model = CoOwner
-        fields = ('id', 'investor', 'investment_account', 'capital', 'share')
+        fields = ('id', 'investor', 'investment_account', 'capital', 'default_share', 'is_creator')
 
