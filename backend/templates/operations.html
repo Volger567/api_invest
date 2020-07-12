@@ -19,13 +19,21 @@
             <span class="operation-new-day">{{ operation.date|date }}</span>
           {% endifchanged %}
           <li class="operation-item list-group-item text-left {% if operation.payment < 0 %} expense {% else %} income {% endif %}">
+            <!-- Доли -->
+            {% if operation.shares.all.count %}
+              <div class="operation-item-shares">
+              {% for share in operation.shares.all %}
+                &rfisht; {{ share.co_owner.investor.username }}: {{ share.value|floatformat:2 }}<br>
+              {% endfor %}
+              </div>
+            {% endif %}
             <div class="float-left">
               <span class="operation-item-date float-left">{{ operation.date|date:"G:i:s" }}</span>
               <br>
               <span class="operation-item-type float-left">
                 {{ operation.friendly_type_format }}
-                {% if operation.quantity %}
-                  (Лотов: {{ operation.quantity|div:operation.figi.lot }})
+                {% if operation.lots %}
+                  (Лотов: {{ operation.lots }})
                 {% endif %}
               </span>
             </div>
@@ -36,13 +44,17 @@
               </div>
               <!-- Комиссия -->
               {% if operation.commission %}
-                <span class="operation-item-commission">
+                <div class="operation-item-commission">
                   {{ operation.commission|payment_format }}<span class="operation-item-payment-abbreviation">{{ operation.currency.abbreviation }}</span>
-                </span>
+                </div>
+              {% endif %}
+              {% if operation.lots %}
+                <div class="operation-item-price">
+                  {{ operation.payment|divide:operation.lots|payment_format }} за лот
+                </div>
               {% endif %}
               <!-- Ценная бумага -->
               {% if operation.figi %}
-                <br>
                 <div class="operation-item-figi">
                   <a href="{% url 'operations' %}?figi={{ operation.figi.figi }}">{{ operation.figi.name }}</a>
                 </div>

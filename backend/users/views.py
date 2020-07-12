@@ -1,6 +1,7 @@
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.views import LoginView as SuperLoginView, LogoutView as SuperLogoutView
-from django.db.models import Sum, F, Value
+from django.db import models
+from django.db.models import Sum, F, Value, ExpressionWrapper
 from django.db.models.functions import Coalesce
 from django.urls import reverse
 from django.views.generic import FormView, TemplateView, ListView
@@ -59,11 +60,13 @@ class InvestmentAccountSettings(LoginRequiredMixin, UpdateInvestmentAccount, Lis
         if self.investment_account:
             total_income = self.investment_account.prop_total_income
             total_sharing = self.investment_account.co_owners.aggregate(Sum('default_share'))['default_share__sum']
-            print(total_income, total_sharing)
             return (
                 self.investment_account.co_owners
                 .with_is_creator_annotations()
-                .annotate(limit=F('capital')+F('default_share')/Value(total_sharing)*Value(total_income))
+                .annotate(limit=ExpressionWrapper(
+                    F('capital')+F('default_share')/Value(total_sharing)*Value(total_income),
+                    output_field=models.DecimalField()
+                ))
             )
         return CoOwner.objects.none()
 

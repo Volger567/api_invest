@@ -1,15 +1,17 @@
 from django.core.exceptions import ObjectDoesNotExist
-from django.db.models import Q
+from django.db.models import Q, Subquery
 from rest_framework import status
-from rest_framework.generics import ListCreateAPIView
+from rest_framework.generics import ListCreateAPIView, ListAPIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework.viewsets import ViewSet
 
+from api.permissions import HasDefaultInvestmentAccount
 from api.serializers import InvestmentAccountSerializer, InvestorSerializer, CoOwnerSerializer
 from users.models import InvestmentAccount, Investor, CoOwner
 
+
+# FIXME: сделать все сериализаторы и вьюхи по человечески
 
 class InvestmentAccountView(ListCreateAPIView):
     permission_classes = (IsAuthenticated, )
@@ -41,24 +43,24 @@ class DefaultInvestmentAccountView(APIView):
             return Response(status=status.HTTP_202_ACCEPTED)
 
 
-class SearchInvestorsView(ViewSet):
-    permission_classes = (IsAuthenticated, )
+class SearchForCoOwnersView(APIView):
+    permission_classes = (IsAuthenticated, HasDefaultInvestmentAccount)
 
-    def retrieve(self, request):
+    def get(self, request, *args, **kwargs):
         """ Получение инвесторов по username для добавления в совладельцы """
         username = request.GET.get('username')
-        queryset = (
+        names = (
             Investor.objects
             .filter(username__istartswith=username)
-            .exclude(username=self.request.user.username)
-            .exclude(username__in=self.request.user.default_investment_account.co_owners
-                     .all().values('investor__username'))
+            .exclude(username__in=Subquery(
+                self.request.user.default_investment_account.co_owners.values('investor__username')
+            ))[:5].values_list('username', flat=True)
         )
-        return Response(InvestorSerializer(queryset, many=True).data, status=status.HTTP_200_OK)
+        return Response(names, status=status.HTTP_200_OK)
 
 
 class CoOwnersView(APIView):
-    permission_classes = (IsAuthenticated, )
+    permission_classes = (IsAuthenticated, HasDefaultInvestmentAccount)
 
     def post(self, request, *args, **kwargs):
         """ Добавление совладельца """
@@ -76,3 +78,15 @@ class CoOwnersView(APIView):
             self.request.user.default_investment_account.co_owners.with_is_creator_annotations().order_by('-is_creator')
         ).data
         return Response(response, status=status.HTTP_200_OK)
+
+
+class EditCoOwnersView(APIView):
+    permission_classes = (IsAuthenticated, HasDefaultInvestmentAccount)
+
+    def post(self):
+        # XXX:
+        if self.request.user == InvestmentAccount.objects.get(pk=self.request.POST.get('investment_account')).creator:
+            ...
+        else:
+            return Response(status=status.HTTP_403_FORBIDDEN)
+

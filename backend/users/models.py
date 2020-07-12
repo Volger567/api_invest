@@ -160,7 +160,7 @@ class InvestmentAccount(models.Model):
         for operation in operations:
             for co_owner in co_owners:
                 bulk_create_shares.append(Share(
-                    operation=operation, co_owner_id=co_owner.pk, share=co_owner.default_share
+                    operation=operation, co_owner_id=co_owner.pk, value=co_owner.default_share
                 ))
             if operation.type in (Operation.Types.BUY, Operation.Types.BUY_CARD):
                 deal, _ = Deal.objects.opened().get_or_create(
@@ -179,7 +179,7 @@ class InvestmentAccount(models.Model):
                     .order_by('-opened_at')[0]
                 )
                 deal.operations.add(operation)
-        Share.objects.bulk_create(bulk_create_shares, ignore_conflicts=True)
+        Share.objects.bulk_create(bulk_create_shares)
 
     def update_currency_assets(self):
         """ Обновить валютные активы в портфеле"""
@@ -246,7 +246,7 @@ class CoOwner(models.Model):
     investment_account = models.ForeignKey(
         InvestmentAccount, verbose_name='Инвестиционный счет', on_delete=models.CASCADE, related_name='co_owners')
     capital = models.DecimalField(verbose_name='Капитал', max_digits=20, decimal_places=4, default=0)
-    default_share = models.DecimalField(verbose_name='Доля по умолчанию', max_digits=8, decimal_places=4, default=0)
+    default_share = models.PositiveIntegerField(verbose_name='Доля по умолчанию', default=0)
 
     def __str__(self):
         return f'{self.investor}, {self.investment_account.name}'
@@ -278,6 +278,11 @@ def investment_account_post_save(**kwargs):
         creator.default_investment_account = instance
         creator.save(update_fields=('default_investment_account', ))
 
+        co_owner = CoOwner.objects.create(
+            investor=creator, investment_account=instance,
+            default_share=100, capital=0
+        )
+
         # Загружаем все операции из Тинькофф
         instance.update_operations()
 
@@ -289,9 +294,7 @@ def investment_account_post_save(**kwargs):
                 Operation.Types.PAY_IN, Operation.Types.PAY_OUT, Operation.Types.SERVICE_COMMISSION))
             .aggregate(s=Coalesce(Sum('payment'), 0))['s']
         )
-
+        co_owner.capital = creator_capital
+        co_owner.save(update_fields=['capital'])
         # Создатель счета становится одним из совладельцев счета
-        CoOwner.objects.create(
-            investor=creator, investment_account=instance,
-            default_share=100, capital=creator_capital
-        )
+

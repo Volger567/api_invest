@@ -157,3 +157,6 @@ try:
     from .local_settings import *
 except ImportError:
     pass
+
+if DEBUG:
+    INSTALLED_APPS.append('django_extensions')

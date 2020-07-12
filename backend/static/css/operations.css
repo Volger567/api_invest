@@ -20,6 +20,15 @@
   border-left: 3px double red;
 }
 
+.operation-item-shares {
+  color: rgba(120, 130, 200, .5);
+  cursor: pointer;
+  font-size: .9em;
+  position: absolute;
+  top: 5px;
+  right: -205px;
+  width: 200px;
+}
 /* Дата операции */
 .operation-item-date {
   color: rgba(20, 80, 150, .9);
@@ -34,10 +43,10 @@
 .operation-item-payment {
   font-size: 1.25em;
 }
-.operation-item.income .operation-item-payment {
+.operation-item.income .operation-item-payment, .operation-item.income .operation-item-price {
   color: rgba(0, 100, 0, .9)
 }
-.operation-item.expense .operation-item-payment {
+.operation-item.expense .operation-item-payment, .operation-item.expense .operation-item-price {
   color: rgba(150, 0, 0, .9);
 }
 /* Символ валюты */

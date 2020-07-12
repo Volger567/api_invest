@@ -96,9 +96,14 @@ class Share(models.Model):
             models.UniqueConstraint(fields=('operation', 'co_owner'), name='unique_co_owner_op')
         ]
 
-    operation = models.ForeignKey(Operation, verbose_name='Операция', on_delete=models.CASCADE)
-    co_owner = models.ForeignKey('users.CoOwner', verbose_name='Совладелец', on_delete=models.CASCADE)
+    operation = models.ForeignKey(
+        Operation, verbose_name='Операция', on_delete=models.CASCADE, related_name='shares')
+    co_owner = models.ForeignKey(
+        'users.CoOwner', verbose_name='Совладелец', on_delete=models.CASCADE, related_name='shares')
     value = models.DecimalField(verbose_name='Доля', max_digits=8, decimal_places=4)
+
+    def __str__(self):
+        return f'{self.co_owner.investor.username} ({self.value})'
 
 
 class Transaction(models.Model):

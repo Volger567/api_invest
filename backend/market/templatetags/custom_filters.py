@@ -26,6 +26,11 @@ def div(value, arg):
     return value // arg
 
 
+@register.filter
+def divide(value, arg):
+    return value / arg
+
+
 # FIXME: Отпимизировать запрос и считать на бэке
 @register.filter
 def percent_profit_format(operations):
