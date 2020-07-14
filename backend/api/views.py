@@ -1,15 +1,13 @@
-import json
-
 from django.core.exceptions import ObjectDoesNotExist
 from django.db.models import Q, Subquery
 from rest_framework import status
-from rest_framework.generics import ListCreateAPIView, ListAPIView
+from rest_framework.generics import ListCreateAPIView, RetrieveUpdateDestroyAPIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from api.permissions import HasDefaultInvestmentAccount
-from api.serializers import InvestmentAccountSerializer, InvestorSerializer, CoOwnerSerializer
+from api.permissions import HasDefaultInvestmentAccount, IsDefaultInvestmentAccountCreator
+from api.serializers import InvestmentAccountSerializer, CoOwnerSerializer, ShareSerializer
 from market.models import Share, Operation
 from users.models import InvestmentAccount, Investor, CoOwner
 
@@ -135,3 +133,11 @@ class CoOwnersUpdateView(APIView):
         else:
             return Response(status=status.HTTP_403_FORBIDDEN)
 
+
+class ShareView(RetrieveUpdateDestroyAPIView):
+    permission_classes = (IsAuthenticated, IsDefaultInvestmentAccountCreator)
+    serializer_class = ShareSerializer
+    queryset = Share.objects.all()
+
+    def check_object_permissions(self, request, obj):
+        return request.user.default_investment_account == obj.co_owner.investment_account

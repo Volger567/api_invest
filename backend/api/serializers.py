@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
 
+from market.models import Share
 from tinkoff_api import TinkoffProfile
 from tinkoff_api.exceptions import InvalidTokenError
 from users.models import InvestmentAccount, Investor, CoOwner
@@ -42,3 +43,9 @@ class CoOwnerSerializer(serializers.ModelSerializer):
         fields = ('id', 'investor', 'investment_account', 'capital', 'default_share', 'is_creator')
 
     is_creator = serializers.BooleanField(read_only=True)
+
+
+class ShareSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Share
+        fields = '__all__'

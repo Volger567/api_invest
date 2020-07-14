@@ -22,12 +22,14 @@
 
 .operation-item-shares {
   color: rgba(120, 130, 200, .5);
-  cursor: pointer;
   font-size: .9em;
   position: absolute;
   top: 5px;
   right: -205px;
   width: 200px;
+}
+.edit-share {
+  cursor: pointer;
 }
 /* Дата операции */
 .operation-item-date {

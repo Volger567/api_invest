@@ -95,6 +95,7 @@ class Share(models.Model):
         constraints = [
             models.UniqueConstraint(fields=('operation', 'co_owner'), name='unique_co_owner_op')
         ]
+        ordering = ['pk']
 
     operation = models.ForeignKey(
         Operation, verbose_name='Операция', on_delete=models.CASCADE, related_name='shares')

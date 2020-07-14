@@ -23,7 +23,9 @@
             {% if operation.shares.all.count %}
               <div class="operation-item-shares">
               {% for share in operation.shares.all %}
-                &rfisht; {{ share.co_owner.investor.username }}: {{ share.value }}<br>
+                <span class="edit-share"
+                      data-pk="{{ share.pk }}" data-value="{{ share.value }}" data-investor="{{ share.co_owner.investor.username }}">
+                  &rfisht; {{ share.co_owner.investor.username }}: {{ share.value }}</span><br>
               {% endfor %}
               </div>
             {% endif %}
