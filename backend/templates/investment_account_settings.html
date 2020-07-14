@@ -10,8 +10,8 @@
   <div class="text-center">
   {% if request.user.default_investment_account and request.user.default_investment_account.creator == request.user %}
     <h3>Счет: {{ request.user.default_investment_account.name }}({{ request.user.default_investment_account.broker_account_id }})</h3>
-    <h5>Общий капитал: {{ total_pay_in|floatformat:2 }}</h5>
-    <input type="hidden" value="{{ total_pay_in }}" id="total-capital">
+    <h5>Общий капитал: {{ total_capital|floatformat:2 }}</h5>
+    <input type="hidden" value="{{ total_capital }}" id="total-capital">
     <input type="hidden" value="{{ total_income }}" id="total-income">
     <input type="hidden" value="{{ request.user.default_investment_account.pk }}" id="investment_account_pk">
     <form class="m-auto text-left investment-account-settings-form">
@@ -21,7 +21,7 @@
       <div class="form-group setting-item">
         <div id="co-owners">
           {% for co_owner in co_owners %}
-            <table class="table co-owners-table">
+            <table class="table co-owners-table" data-co_owner_pk="{{ co_owner.pk }}">
               <caption style="caption-side: top">
                 Инвестор: {{ co_owner.investor.username }}
               </caption>
@@ -36,7 +36,7 @@
               <tbody>
                 <tr class="text-center">
                   <th class="co-owner-capital">
-                    <input type="number" class="form-control" min="0" max="{{ total_pay_in }}"
+                    <input type="number" class="form-control" min="0" max="{{ total_capital }}"
                            data-target="{{ co_owner.pk }}" value="{{ co_owner.capital|floatformat:2 }}" step="0.01">
                   </th>
                   <th class="co-owner-default-share">

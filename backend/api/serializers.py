@@ -41,3 +41,4 @@ class CoOwnerSerializer(serializers.ModelSerializer):
         model = CoOwner
         fields = ('id', 'investor', 'investment_account', 'capital', 'default_share', 'is_creator')
 
+    is_creator = serializers.BooleanField(read_only=True)

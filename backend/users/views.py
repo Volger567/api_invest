@@ -56,7 +56,6 @@ class InvestmentAccountSettings(LoginRequiredMixin, UpdateInvestmentAccount, Lis
 
     def get_queryset(self):
         """ Получение списка совладельцев """
-        # TODO
         if self.investment_account:
             total_income = self.investment_account.prop_total_income
             total_sharing = self.investment_account.co_owners.aggregate(Sum('default_share'))['default_share__sum']
@@ -64,7 +63,7 @@ class InvestmentAccountSettings(LoginRequiredMixin, UpdateInvestmentAccount, Lis
                 self.investment_account.co_owners
                 .with_is_creator_annotations()
                 .annotate(limit=ExpressionWrapper(
-                    F('capital')+F('default_share')/Value(total_sharing)*Value(total_income),
+                    F('capital') + F('default_share') * (total_income / total_sharing),
                     output_field=models.DecimalField()
                 ))
             )
@@ -74,16 +73,8 @@ class InvestmentAccountSettings(LoginRequiredMixin, UpdateInvestmentAccount, Lis
         context = super().get_context_data(**kwargs)
         # FIXME: сделать для всех валют
         if self.investment_account:
-            context['total_pay_in'] = (
-                self.request.user.default_investment_account.operations
-                .filter(type__in=(Operation.Types.PAY_IN, Operation.Types.PAY_OUT, Operation.Types.SERVICE_COMMISSION))
-                .aggregate(s=Sum('payment'))['s']
-            )
-            context['creator_capital'] = \
-                context['total_pay_in'] - self.request.user.default_investment_account.co_owners.aggregate(
-                    s=Coalesce(Sum('capital'), 0))['s']
-
+            context['total_capital'] = self.request.user.default_investment_account.prop_total_capital
             context['total_income'] = (
-                (context['currency_assets'].get(currency__iso_code='RUB').value - context['total_pay_in'])
+                (context['currency_assets'].get(currency__iso_code='RUB').value - context['total_capital'])
             )
         return context

@@ -77,6 +77,15 @@ class InvestmentAccount(models.Model):
         ).aggregate(Sum('_income'))['_income__sum']
         return closed_deals_total_income + opened_deals_total_income
 
+    @property
+    def prop_total_capital(self):
+        # FIXME: сделать для всех валют
+        return (
+            self.operations
+            .filter(type__in=(Operation.Types.PAY_IN, Operation.Types.PAY_OUT, Operation.Types.SERVICE_COMMISSION))
+            .aggregate(Sum('payment'))['payment__sum']
+        )
+
     def update_operations(self):
         """ Обновление списка операций и сделок """
         # TODO: отдать это celery
@@ -278,6 +287,7 @@ def investment_account_post_save(**kwargs):
         creator.default_investment_account = instance
         creator.save(update_fields=('default_investment_account', ))
 
+        # Создатель счета становится одним из совладельцев счета
         co_owner = CoOwner.objects.create(
             investor=creator, investment_account=instance,
             default_share=100, capital=0
@@ -296,5 +306,3 @@ def investment_account_post_save(**kwargs):
         )
         co_owner.capital = creator_capital
         co_owner.save(update_fields=['capital'])
-        # Создатель счета становится одним из совладельцев счета
-

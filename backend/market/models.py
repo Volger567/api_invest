@@ -100,7 +100,7 @@ class Share(models.Model):
         Operation, verbose_name='Операция', on_delete=models.CASCADE, related_name='shares')
     co_owner = models.ForeignKey(
         'users.CoOwner', verbose_name='Совладелец', on_delete=models.CASCADE, related_name='shares')
-    value = models.DecimalField(verbose_name='Доля', max_digits=8, decimal_places=4)
+    value = models.PositiveIntegerField(verbose_name='Доля')
 
     def __str__(self):
         return f'{self.co_owner.investor.username} ({self.value})'

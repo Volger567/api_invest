@@ -23,7 +23,7 @@
             {% if operation.shares.all.count %}
               <div class="operation-item-shares">
               {% for share in operation.shares.all %}
-                &rfisht; {{ share.co_owner.investor.username }}: {{ share.value|floatformat:2 }}<br>
+                &rfisht; {{ share.co_owner.investor.username }}: {{ share.value }}<br>
               {% endfor %}
               </div>
             {% endif %}

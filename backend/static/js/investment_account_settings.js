@@ -63,31 +63,33 @@ $(document).ready(function() {
   })
 
   function saveCoOwner(changeOperations=false) {
-    let coOwners = new Map();
-    coOwners['co_owners'] = new Map();
-    $('.co-owner-capital input').each(function(){
-      let coOwnerId = $(this).data('target');
-      coOwners['co_owners'][coOwnerId] = new Map();
-      coOwners['co_owners'][coOwnerId]['capital'] = $(this).val()
+    let coOwners = [];
+    $('.co-owners-table').each(function() {
+      let item = $(this);
+      let coOwnerPk = item.data('co_owner_pk');
+      let capital = item.find('.co-owner-capital input').val();
+      let defaultShare = item.find('.co-owner-default-share input').val();
+      coOwners.push({
+        "pk": coOwnerPk,
+        "capital": capital,
+        "default_share": defaultShare
+      })
     })
-
-    $('.co-owner-default-share input').each(function(){
-      let coOwnerId = $(this).data('target');
-      coOwners['co_owners'][coOwnerId]['default_share'] = $(this).val()
-    })
-
-    coOwners['change_prev_operations'] = changeOperations
-    coOwners['investment_account'] = $('#investment_account_pk').val()
 
     $.post({
       url: '/api/edit-co-owners/',
       headers: {
-        'X-CSRFTOKEN': csrfToken
+        'X-CSRFTOKEN': csrfToken,
+        'Content-Type': 'application/json'
       },
-      data: coOwners,
+      data: JSON.stringify({
+        'co_owners': coOwners,
+        'change_prev_operations': changeOperations,
+        'investment_account': $('#investment_account_pk').val()
+      }),
       success: function () {
         window.location.reload()
-      }
+      },
     })
   }
   $('#save-co-owners').on('click', function(){
