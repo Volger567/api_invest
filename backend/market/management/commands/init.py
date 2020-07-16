@@ -1,6 +1,7 @@
 import logging
 import os
 
+from django.contrib.auth import get_user_model
 from django.core.management import BaseCommand
 
 from market.models import Currency, Stock
@@ -41,19 +42,35 @@ class Command(BaseCommand):
                 'name': 'Евро'
             }
         )
-
+        user_model = get_user_model()
+        if not user_model.objects.filter(is_superuser=True, is_staff=True).exists():
+            print('Супер-пользователь не существует, создаем')
+            superuser = user_model.objects.create(
+                username=os.getenv('PROJECT_SUPERUSER_USERNAME'),
+                email=os.getenv('PROJECT_SUPERUSER_EMAIL'),
+                is_staff=True,
+                is_superuser=True
+            )
+            superuser.set_password(os.getenv('PROJECT_SUPERUSER_PASSWORD'))
+            superuser.save()
         for c in currencies:
-            Currency.objects.get_or_create(
+            obj, created = Currency.objects.get_or_create(
                 iso_code=c['iso_code'],
                 defaults=c
             )
+            if created:
+                print(f'Валюта {c["iso_code"]} была создана')
+            else:
+                print(f'Валюта {c["iso_code"]} уже существует')
 
-        tp = TinkoffProfile(os.getenv('tinkoff_api_production_token'))
+        token = os.getenv('tinkoff_api_production_token') or os.getenv('tinkoff_api_sandbox_token')
+        tp = TinkoffProfile(os.getenv(token))
         tp.auth()
         stocks = tp.market_stocks()
         db_currencies = Currency.objects.all()
         if options['with_update']:
             for stock in stocks['payload']['instruments']:
+                # TODO: оптимизировать
                 Stock.objects.update_or_create(
                     figi=stock['figi'],
                     defaults={
@@ -82,4 +99,4 @@ class Command(BaseCommand):
                         'currency': db_currencies.get(iso_code__iexact=stock['currency']),
                         'name': stock['name']
                     }))
-            Stock.objects.bulk_create(result)
+            Stock.objects.bulk_create(result, ignore_conflicts=True)

@@ -1,0 +1,28 @@
+version: "3"
+
+volumes:
+  postgres_data:
+
+services:
+  db:
+    image: postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data/
+    environment:
+      - POSTGRES_DB=
+      - POSTGRES_USER=
+      - POSTGRES_PASSWORD=
+    ports:
+    - "5432:5432"
+
+  web:
+    build: backend/
+    command: "./wait-for-it.sh db:5432 -- ./run.sh"
+    env_file:
+      - backend/.env
+    volumes:
+      - .:/code
+    ports:
+      - "9999:9999"
+    depends_on:
+      - db
