@@ -64,7 +64,7 @@ class Command(BaseCommand):
                 print(f'Валюта {c["iso_code"]} уже существует')
 
         token = os.getenv('tinkoff_api_production_token') or os.getenv('tinkoff_api_sandbox_token')
-        tp = TinkoffProfile(os.getenv(token))
+        tp = TinkoffProfile(token)
         tp.auth()
         stocks = tp.market_stocks()
         db_currencies = Currency.objects.all()

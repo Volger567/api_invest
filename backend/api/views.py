@@ -86,7 +86,7 @@ class CoOwnersView(APIView):
 
 
 class CoOwnersUpdateView(APIView):
-    permission_classes = (IsAuthenticated, HasDefaultInvestmentAccount)
+    permission_classes = (IsAuthenticated, IsDefaultInvestmentAccountCreator)
 
     def post(self, request, *args, **kwargs):
         # FIXME: сделать красиво

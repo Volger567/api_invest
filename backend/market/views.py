@@ -1,3 +1,5 @@
+import time
+
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import ObjectDoesNotExist
 from django.db.models import Max, Sum, Min, F, Subquery, OuterRef
@@ -42,7 +44,12 @@ class OperationsView(LoginRequiredMixin, UpdateInvestmentAccount, ListView):
                 investment_account=self.investment_account,
                 status=Operation.Statuses.DONE, figi=figi_object
             )
-        return queryset.annotate(lots=F('quantity')/F('figi__lot')).select_related('currency', 'figi').distinct().order_by('-date')
+        return (
+            queryset
+            .annotate(lots=F('quantity')/F('figi__lot'))
+            .select_related('currency', 'figi')
+            .distinct().order_by('-date')
+        )
 
 
 class DealsView(LoginRequiredMixin, UpdateInvestmentAccount, TemplateView):

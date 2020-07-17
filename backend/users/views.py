@@ -1,12 +1,10 @@
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.views import LoginView as SuperLoginView, LogoutView as SuperLogoutView
 from django.db import models
-from django.db.models import Sum, F, Value, ExpressionWrapper
-from django.db.models.functions import Coalesce
+from django.db.models import Sum, F, ExpressionWrapper
 from django.urls import reverse
 from django.views.generic import FormView, TemplateView, ListView
 
-from market.models import Operation
 from market.views import UpdateInvestmentAccount
 from users.forms import SignupForm, LoginForm
 from users.models import InvestmentAccount, CoOwner

@@ -1,4 +1,5 @@
 import datetime
+import os
 from typing import List, Dict, Any
 
 import dateutil.parser
@@ -167,10 +168,11 @@ class InvestmentAccount(models.Model):
         bulk_create_shares = []
         co_owners = self.co_owners.all().values_list('pk', 'default_share', named=True)
         for operation in operations:
-            for co_owner in co_owners:
-                bulk_create_shares.append(Share(
-                    operation=operation, co_owner_id=co_owner.pk, value=co_owner.default_share
-                ))
+            if operation.type in (Operation.Types.BUY, Operation.Types.BUY_CARD):
+                for co_owner in co_owners:
+                    bulk_create_shares.append(Share(
+                        operation=operation, co_owner_id=co_owner.pk, value=co_owner.default_share
+                    ))
             if operation.type in (Operation.Types.BUY, Operation.Types.BUY_CARD):
                 deal, _ = Deal.objects.opened().get_or_create(
                     investment_account=self,
@@ -208,7 +210,7 @@ class InvestmentAccount(models.Model):
                 obj.save(update_fields=['value'])
 
     def update_all(self, now):
-        update_frequency = datetime.timedelta(seconds=60)
+        update_frequency = datetime.timedelta(minutes=float(os.getenv('PROJECT_OPERATIONS_UPDATE_FREQUENCY', 1)))
         if now - self.sync_at > update_frequency:
             self.update_currency_assets()
             self.update_operations()
