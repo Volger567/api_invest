@@ -5,7 +5,7 @@ volumes:
 
 services:
   db:
-    image: postgres
+    image: postgres:12.3
     volumes:
       - postgres_data:/var/lib/postgresql/data/
     environment:
@@ -13,7 +13,7 @@ services:
       - POSTGRES_USER=
       - POSTGRES_PASSWORD=
     ports:
-    - "5432:5432"
+      - "5432:5432"
 
   web:
     build: backend/
