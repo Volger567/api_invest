@@ -1,5 +1,8 @@
+import collections
+from decimal import Decimal
+
 from django.db import models
-from django.db.models import Sum, F, Q, Case, When
+from django.db.models import Sum, F, Q, Case, When, ExpressionWrapper, Avg
 from django.db.models.functions import Coalesce
 
 
@@ -108,9 +111,8 @@ class Share(models.Model):
 
 
 class Transaction(models.Model):
-    """
-        В одной операции покупки/продажи может быть несколько транзакций,
-    так бывает когда заявки реализуются по частям, а не сразу
+    """ В одной операции покупки/продажи может быть несколько транзакций,
+        так бывает когда заявки реализуются по частям, а не сразу
     """
     class Meta:
         verbose_name = 'Транзакции'
@@ -165,10 +167,9 @@ class DealManager(models.Manager):
 
 
 class Deal(models.Model):
-    """
-        Набор операций для одной компании/фонда и т.д.
-    Сделка считается открытой при покупке ценной бумаги,
-    а закрытой при продаже всех лотов этой ценной бумаги
+    """ Набор операций для одной компании/фонда и т.д.
+        Сделка считается открытой если количество проданных лотов < чем купленных,
+        а закрытой при продаже всех лотов этой ценной бумаги
     """
     class Meta:
         verbose_name = 'Сделка'
@@ -185,8 +186,90 @@ class Deal(models.Model):
     def __str__(self):
         return str(self.figi)
 
+    def recalculation_income(self):
+        """ Перерасчет дохода со сделки для каждого участника """
+        operations = (
+            self.operations
+            .prefetch_related('shares')
+            .annotate(
+                total_shares=Sum('shares__value'),
+                price=ExpressionWrapper(F('payment')/F('quantity'), output_field=models.DecimalField())
+            )
+        )
+        total_shares = collections.Counter()
+        tmp_buy = (
+            operations
+            .filter(type__in=(Operation.Types.BUY, Operation.Types.BUY_CARD))
+            .aggregate(q=Sum('quantity'))
+        )
+        total_bought_quantity = tmp_buy['q']
+        total_bought_commission = collections.Counter()
+        total_paid = collections.Counter()
+        tmp_sell = (
+            operations
+            .filter(type=Operation.Types.SELL)
+            .aggregate(avg=Avg('price'), q=Sum('quantity'), commission=Sum('commission'))
+        )
+        average_sell_price = tmp_sell['avg']
+        total_sold_quantity = tmp_sell['q']
+        total_sold_commission = tmp_sell['commission']
+        dividend_income = (
+            operations
+            .filter(type__in=(Operation.Types.DIVIDEND, Operation.Types.TAX_DIVIDEND))
+            .aggregate(income=Coalesce(Sum('payment'), 0))['income']
+        )
+        for operation in operations.filter(type__in=(Operation.Types.BUY, Operation.Types.BUY_CARD)):
+            for share in operation.shares.all():
+                total_shares[share.co_owner] += Decimal(share.value/operation.total_shares*operation.quantity)
+                total_paid[share.co_owner] += total_shares[share.co_owner] * operation.price
+                total_bought_commission[share.co_owner] += operation.commission * share.value/operation.total_shares
+
+        DealIncome.objects.exclude(co_owner__in=total_shares).delete()
+        bulk_creates = [DealIncome(deal=self, co_owner=co_owner) for co_owner in total_shares]
+        DealIncome.objects.bulk_create(bulk_creates, ignore_conflicts=True)
+        deal_income = DealIncome.objects.filter(deal=self).all()
+        bulk_updates = []
+        if average_sell_price is None:
+            deal_income.update(value=0)
+        else:
+            for co_owner, share in total_shares.items():
+                average_buy_price = total_paid[co_owner]/share
+                income = (average_buy_price + average_sell_price) * total_sold_quantity
+                income *= Decimal(total_sold_quantity/total_bought_quantity)
+                income *= Decimal(share/total_bought_quantity)
+                if income > 0:
+                    # Налог 13%
+                    income *= Decimal(0.87)
+                income += total_bought_commission[co_owner]
+                income += share/total_bought_quantity * total_sold_commission
+                income += share/total_bought_quantity * dividend_income
+                deal = deal_income.get(co_owner=co_owner)
+                deal.value = income
+                bulk_updates.append(deal)
+
+            DealIncome.objects.bulk_update(bulk_updates, ['value'])
+
+
+class DealIncome(models.Model):
+    """ Доход со сделки для каждого участника """
+    class Meta:
+        verbose_name = 'Доход за сделку'
+        verbose_name_plural = 'Доходы за сделку'
+        constraints = [
+            models.UniqueConstraint(fields=('deal', 'co_owner'), name='unique deal co-owner')
+        ]
+
+    deal = models.ForeignKey(Deal, verbose_name='Сделка', on_delete=models.CASCADE)
+    co_owner = models.ForeignKey('users.CoOwner', verbose_name='Совладелец', on_delete=models.CASCADE)
+    # Сколько совладелец заработал с конкретной сделки
+    value = models.DecimalField(verbose_name='Доход', max_digits=20, decimal_places=4, default=0)
+
+    def __str__(self):
+        return f'{self.deal}: {self.co_owner} ({self.value})'
+
 
 class Stock(models.Model):
+    """ Ценная акция на рынке """
     class Meta:
         verbose_name = 'Акция'
         verbose_name_plural = 'Акции'

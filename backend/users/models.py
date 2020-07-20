@@ -12,7 +12,7 @@ from django.db.models.signals import post_save
 from django.dispatch import receiver
 
 from core import settings
-from market.models import Operation, Currency, Stock, Deal, Share
+from market.models import Operation, Currency, Stock, Deal, Share, DealIncome
 from tinkoff_api import TinkoffProfile
 
 
