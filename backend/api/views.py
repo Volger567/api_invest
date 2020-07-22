@@ -119,7 +119,7 @@ class CoOwnersUpdateView(APIView):
                 bulk_creates = []
                 operations = updated_investment_account.operations.filter(type__in=(
                     Operation.Types.BUY, Operation.Types.BUY_CARD, Operation.Types.TAX_DIVIDEND,
-                    Operation.Types.DIVIDEND, Operation.Types.SELL,
+                    Operation.Types.DIVIDEND
                 ))
                 for operation in operations:
                     for co_owner in co_owners:
@@ -129,6 +129,8 @@ class CoOwnersUpdateView(APIView):
                             value=co_owner.default_share
                         ))
                 Share.objects.bulk_create(bulk_creates)
+                for deal in updated_investment_account.deals.all():
+                    deal.recalculation_income()
             return Response(status=status.HTTP_202_ACCEPTED)
         else:
             return Response(status=status.HTTP_403_FORBIDDEN)
@@ -141,3 +143,8 @@ class ShareView(RetrieveUpdateDestroyAPIView):
 
     def check_object_permissions(self, request, obj):
         return request.user.default_investment_account == obj.co_owner.investment_account
+
+    def perform_update(self, serializer):
+        instance = serializer.save()
+        instance.operation.deal.recalculation_income()
+

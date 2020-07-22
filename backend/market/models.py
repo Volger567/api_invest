@@ -221,7 +221,7 @@ class Deal(models.Model):
         for operation in operations.filter(type__in=(Operation.Types.BUY, Operation.Types.BUY_CARD)):
             for share in operation.shares.all():
                 total_shares[share.co_owner] += Decimal(share.value/operation.total_shares*operation.quantity)
-                total_paid[share.co_owner] += total_shares[share.co_owner] * operation.price
+                total_paid[share.co_owner] += Decimal(share.value/operation.total_shares*operation.quantity) * operation.price
                 total_bought_commission[share.co_owner] += operation.commission * share.value/operation.total_shares
 
         DealIncome.objects.exclude(co_owner__in=total_shares).delete()
@@ -235,7 +235,7 @@ class Deal(models.Model):
             for co_owner, share in total_shares.items():
                 average_buy_price = total_paid[co_owner]/share
                 income = (average_buy_price + average_sell_price) * total_sold_quantity
-                income *= Decimal(total_sold_quantity/total_bought_quantity)
+                # income *= Decimal(total_sold_quantity/total_bought_quantity)
                 income *= Decimal(share/total_bought_quantity)
                 if income > 0:
                     # Налог 13%

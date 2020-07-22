@@ -74,7 +74,7 @@ class InvestmentAccount(models.Model):
         pieces_sold = Sum('operations__quantity', filter=only_sell)
         opened_deals_total_income = (
             Deal.objects.opened()
-            .annotate(_income=ExpressionWrapper(avg_sum*pieces_sold, output_field=models.DecimalField()))
+            .annotate(_income=Coalesce(ExpressionWrapper(avg_sum*pieces_sold, output_field=models.DecimalField()), 0))
         ).aggregate(Sum('_income'))['_income__sum']
         return closed_deals_total_income + opened_deals_total_income
 
@@ -167,20 +167,20 @@ class InvestmentAccount(models.Model):
         ).order_by('date')
         bulk_create_shares = []
         co_owners = self.co_owners.all().values_list('pk', 'default_share', named=True)
+        deals_for_recalculation_income = []
         for operation in operations:
             if operation.type in (Operation.Types.BUY, Operation.Types.BUY_CARD):
                 for co_owner in co_owners:
                     bulk_create_shares.append(Share(
                         operation=operation, co_owner_id=co_owner.pk, value=co_owner.default_share
                     ))
-            if operation.type in (Operation.Types.BUY, Operation.Types.BUY_CARD):
                 deal, _ = Deal.objects.opened().get_or_create(
                     investment_account=self,
                     figi=operation.figi
                 )
                 deal.operations.add(operation)
             elif operation.type == Operation.Types.SELL:
-                deal = Deal.objects.opened().get(investment_account=self, figi=operation.figi)
+                deal, _ = Deal.objects.opened().get_or_create(investment_account=self, figi=operation.figi)
                 deal.operations.add(operation)
             else:
                 deal = (
@@ -190,7 +190,10 @@ class InvestmentAccount(models.Model):
                     .order_by('-opened_at')[0]
                 )
                 deal.operations.add(operation)
-        Share.objects.bulk_create(bulk_create_shares)
+            deals_for_recalculation_income.append(deal)
+        Share.objects.bulk_create(bulk_create_shares, ignore_conflicts=True)
+        for d in deals_for_recalculation_income:
+            d.recalculation_income()
 
     def update_currency_assets(self):
         """ Обновить валютные активы в портфеле"""
@@ -215,6 +218,7 @@ class InvestmentAccount(models.Model):
             self.update_currency_assets()
             self.update_operations()
             self.sync_at = now
+            self.save()
 
     def __str__(self):
         return f'{self.name} ({self.creator})'

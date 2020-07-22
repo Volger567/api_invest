@@ -22,7 +22,7 @@
           <li class="deal-item list-group-item text-left {% if deal.expected_profit > 0 %} income {% else %} expense {% endif %}">
             <div class="float-left">
                 <span class="deal-item-is-closed float-left">
-                  {{ deal.earliest_operation_date|date:"d/m/y H:m" }}
+                  {{ deal.earliest_operation_date|date:"d/m/y H:i" }}
                 </span>
                 <br>
                 <span class="deal-item-lots float-left">
@@ -57,7 +57,7 @@
           <li class="deal-item list-group-item text-left {% if deal.profit < 0 %} expense {% else %} income {% endif %}">
             <div class="float-left">
               <span class="deal-item-is-closed float-left">
-                {{ deal.earliest_operation_date|date:"d/m/y H:m" }} - {{ deal.latest_operation_date|date:"d/m/y H:m" }}<br>
+                {{ deal.earliest_operation_date|date:"d/m/y H:i" }} - {{ deal.latest_operation_date|date:"d/m/y H:i" }}<br>
               </span>
               <br>
               <span class="operation-item-type float-left">

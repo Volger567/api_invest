@@ -56,6 +56,7 @@ class DealsView(LoginRequiredMixin, UpdateInvestmentAccount, TemplateView):
     template_name = 'deals.html'
 
     def get_context_data(self, **kwargs):
+        # TODO: дату нормально выводить
         figi = self.request.GET.get('figi')
         try:
             figi_object = Stock.objects.get(figi=figi)
