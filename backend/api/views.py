@@ -8,6 +8,7 @@ from rest_framework.views import APIView
 
 from api.permissions import HasDefaultInvestmentAccount, IsDefaultInvestmentAccountCreator
 from api.serializers import InvestmentAccountSerializer, CoOwnerSerializer, ShareSerializer
+from api.exceptions import TotalCapitalGrowThanMaxCapital
 from market.models import Share, Operation
 from users.models import InvestmentAccount, Investor, CoOwner
 
@@ -25,10 +26,16 @@ class InvestmentAccountView(ListCreateAPIView):
 
 
 class DefaultInvestmentAccountView(APIView):
+    """ Получение инвестиционного счета, установленного по умолчанию.
+        Установка инвестиционного счета как счета по умолчанию
+    """
     permission_classes = (IsAuthenticated, )
 
     def get(self, request, *args, **kwargs):
-        return Response({'value': request.user.default_investment_account.pk}, status=200)
+        return Response(
+            InvestmentAccountSerializer(request.user.default_investment_account).data,
+            status=status.HTTP_200_OK
+        )
 
     def post(self, request, *args, **kwargs):
         """ Установка инвестиционного счета по умолчанию """
@@ -47,6 +54,7 @@ class DefaultInvestmentAccountView(APIView):
 
 
 class SearchForCoOwnersView(APIView):
+    """ Поиск пользователя по началу username """
     permission_classes = (IsAuthenticated, HasDefaultInvestmentAccount)
 
     def get(self, request, *args, **kwargs):
@@ -89,54 +97,58 @@ class CoOwnersUpdateView(APIView):
     permission_classes = (IsAuthenticated, IsDefaultInvestmentAccountCreator)
 
     def post(self, request, *args, **kwargs):
+        """ Изменение капитала и доли по умолчанию совладельцев """
         # FIXME: сделать красиво
         updated_investment_account = InvestmentAccount.objects.get(pk=request.data.get('investment_account'))
 
-        if request.user == updated_investment_account.creator:
-            total_capital = 0
-            bulk_updates = []
-            for co_owner_data in request.data.get('co_owners'):
-                co_owner = CoOwner.objects.get(pk=co_owner_data['pk'], investment_account=updated_investment_account)
-                co_owner_serialized = CoOwnerSerializer(
-                    instance=co_owner, data=co_owner_data, partial=True
-                )
-                if co_owner_serialized.is_valid(raise_exception=True):
-                    capital = co_owner_serialized.validated_data['capital']
-                    default_share = co_owner_serialized.validated_data['default_share']
-                    co_owner.capital = capital
-                    co_owner.default_share = default_share
-                    total_capital += capital
-                    bulk_updates.append(co_owner)
-            max_capital = updated_investment_account.prop_total_capital
-            if total_capital > max_capital:
-                Response({'errors': 'Слишком большой переданный капитал'})
-            else:
-                CoOwner.objects.bulk_update(bulk_updates, ['capital', 'default_share'])
-            if request.data.get('change_prev_operations'):
-                # FIXME: оптимизировать
-                Share.objects.filter(operation__investment_account=updated_investment_account).delete()
-                co_owners = updated_investment_account.co_owners.values_list('pk', 'default_share', named=True)
-                bulk_creates = []
-                operations = updated_investment_account.operations.filter(type__in=(
-                    Operation.Types.BUY, Operation.Types.BUY_CARD, Operation.Types.TAX_DIVIDEND,
-                    Operation.Types.DIVIDEND
-                ))
-                for operation in operations:
-                    for co_owner in co_owners:
-                        bulk_creates.append(Share(
-                            co_owner_id=co_owner.pk,
-                            operation=operation,
-                            value=co_owner.default_share
-                        ))
-                Share.objects.bulk_create(bulk_creates)
-                for deal in updated_investment_account.deals.all():
-                    deal.recalculation_income()
-            return Response(status=status.HTTP_202_ACCEPTED)
+        # Сумма капиталов всех совладельцев
+        total_capital = 0
+        # Совладельцы, которые будут изменены
+        bulk_updates = []
+        for co_owner_data in request.data.get('co_owners'):
+            co_owner = CoOwner.objects.get(pk=co_owner_data['pk'], investment_account=updated_investment_account)
+            co_owner_serialized = CoOwnerSerializer(
+                instance=co_owner, data=co_owner_data, partial=True
+            )
+            if co_owner_serialized.is_valid(raise_exception=True):
+                capital = co_owner_serialized.validated_data['capital']
+                default_share = co_owner_serialized.validated_data['default_share']
+                co_owner.capital = capital
+                co_owner.default_share = default_share
+                total_capital += capital
+                bulk_updates.append(co_owner)
+        max_capital = updated_investment_account.prop_total_capital
+        if total_capital > max_capital:
+            raise TotalCapitalGrowThanMaxCapital
         else:
-            return Response(status=status.HTTP_403_FORBIDDEN)
+            CoOwner.objects.bulk_update(bulk_updates, ['capital', 'default_share'])
+
+        # Если передан флаг change_prev_operations, то предыдущие доли операций
+        # инвестиционного счета меняются в соответствие с переданными данными
+        if request.data.get('change_prev_operations'):
+            # FIXME: оптимизировать
+            Share.objects.filter(operation__investment_account=updated_investment_account).delete()
+            co_owners = updated_investment_account.co_owners.values_list('pk', 'default_share', named=True)
+            bulk_creates = []
+            operations = updated_investment_account.operations.filter(type__in=(
+                Operation.Types.BUY, Operation.Types.BUY_CARD, Operation.Types.TAX_DIVIDEND,
+                Operation.Types.DIVIDEND
+            ))
+            for operation in operations:
+                for co_owner in co_owners:
+                    bulk_creates.append(Share(
+                        co_owner_id=co_owner.pk,
+                        operation=operation,
+                        value=co_owner.default_share
+                    ))
+            Share.objects.bulk_create(bulk_creates)
+            for deal in updated_investment_account.deals.all():
+                deal.recalculation_income()
+        return Response(status=status.HTTP_202_ACCEPTED)
 
 
 class ShareView(RetrieveUpdateDestroyAPIView):
+    """ Доли совладельцев в операциях """
     permission_classes = (IsAuthenticated, IsDefaultInvestmentAccountCreator)
     serializer_class = ShareSerializer
     queryset = Share.objects.all()
@@ -147,4 +159,3 @@ class ShareView(RetrieveUpdateDestroyAPIView):
     def perform_update(self, serializer):
         instance = serializer.save()
         instance.operation.deal.recalculation_income()
-

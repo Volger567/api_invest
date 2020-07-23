@@ -20,7 +20,7 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
-        """ Создает дефолтные записи в моделях """
+        """ Создает дефолтные записи в моделях валюты и ценных бумаг """
 
         currencies = (
             {
