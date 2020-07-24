@@ -1,3 +1,4 @@
+import logging
 import time
 
 from django.contrib.auth.mixins import LoginRequiredMixin
@@ -8,6 +9,9 @@ from django.views.generic import TemplateView, ListView
 
 from market.models import Operation, Stock, Deal
 from tinkoff_api import TinkoffProfile
+
+
+logger = logging.getLogger(__name__)
 
 
 class UpdateInvestmentAccount:

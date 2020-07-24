@@ -1,4 +1,8 @@
+import logging
+import os
+
 from django.core.exceptions import ObjectDoesNotExist
+from django.db import models
 from django.db.models import Q, Subquery
 from rest_framework import status
 from rest_framework.generics import ListCreateAPIView, RetrieveUpdateDestroyAPIView
@@ -13,8 +17,10 @@ from market.models import Share, Operation
 from users.models import InvestmentAccount, Investor, CoOwner
 
 
-# FIXME: сделать все сериализаторы и вьюхи по человечески
+logger = logging.getLogger(__name__)
 
+
+# FIXME: сделать все сериализаторы и вьюхи по человечески
 class InvestmentAccountView(ListCreateAPIView):
     """ Создание инвестиционных счетов и получения списка тех, которыми инвестор владеет """
     permission_classes = (IsAuthenticated, )
@@ -60,13 +66,16 @@ class SearchForCoOwnersView(APIView):
     def get(self, request, *args, **kwargs):
         """ Получение инвесторов по username для добавления в совладельцы """
         username = request.GET.get('username')
+        logger.info(f'{request.user} ищет пользователя "{username}"')
         names = (
             Investor.objects
             .filter(username__istartswith=username)
+            .exclude(username=os.getenv('PROJECT_SUPERUSER_USERNAME'))
             .exclude(username__in=Subquery(
                 self.request.user.default_investment_account.co_owners.values('investor__username')
             ))[:5].values_list('username', flat=True)
         )
+        logger.info(f'{request.user} нашел {names}')
         return Response(names, status=status.HTTP_200_OK)
 
 
@@ -76,11 +85,19 @@ class CoOwnersView(APIView):
     def post(self, request, *args, **kwargs):
         """ Добавление совладельца """
         username = request.POST.get('username')
-        if username != self.request.user and not CoOwner.objects.filter(investor__username=username).exists():
-            CoOwner.objects.create(
-                investor=Investor.objects.get(username=username),
-                investment_account=self.request.user.default_investment_account
-            )
+        logger.info(f'{request.user} пытается добавить совладельца '
+                    f'{username} в {request.user.default_investment_account}')
+        try:
+            if username != os.getenv('PROJECT_SUPERUSER_USERNAME'):
+                CoOwner.objects.get_or_create(
+                    investor=Investor.objects.get(username=username),
+                    investment_account=self.request.user.default_investment_account
+                )
+            else:
+                raise models.ObjectDoesNotExist
+        except models.ObjectDoesNotExist:
+            return Response(status=status.HTTP_400_BAD_REQUEST)
+        logger.info('Совладелец успешно добавлен')
         return Response(status=status.HTTP_200_OK)
 
     def get(self, request, *args, **kwargs):

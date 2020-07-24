@@ -1,4 +1,5 @@
 import datetime
+import logging
 import os
 from typing import List, Dict, Any
 
@@ -14,6 +15,9 @@ from django.dispatch import receiver
 from core import settings
 from market.models import Operation, Currency, Stock, Deal, Share, DealIncome
 from tinkoff_api import TinkoffProfile
+from tinkoff_api.exceptions import InvalidTokenError
+
+logger = logging.getLogger(__name__)
 
 
 class Investor(AbstractUser):
@@ -213,12 +217,19 @@ class InvestmentAccount(models.Model):
                 obj.save(update_fields=['value'])
 
     def update_all(self, now):
+        logger.info(f'Обновление портфеля "{self}"')
         update_frequency = datetime.timedelta(minutes=float(os.getenv('PROJECT_OPERATIONS_UPDATE_FREQUENCY', 1)))
-        if now - self.sync_at > update_frequency:
-            self.update_currency_assets()
-            self.update_operations()
-            self.sync_at = now
-            self.save()
+        try:
+            if now - self.sync_at > update_frequency:
+                self.update_currency_assets()
+                self.update_operations()
+                self.sync_at = now
+                self.save()
+                logger.info('Обновление завершено')
+            else:
+                logger.info('Раннее обновление')
+        except InvalidTokenError:
+            logger.info('Обновление не удалось, токен невалидный')
 
     def __str__(self):
         return f'{self.name} ({self.creator})'

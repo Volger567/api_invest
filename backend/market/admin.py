@@ -40,6 +40,7 @@ class DealAdmin(admin.ModelAdmin):
 
 class StockAdmin(admin.ModelAdmin):
     list_display = ('name', 'ticker', 'figi', 'isin', 'lot', 'currency')
+    search_fields = ('name', )
 
 
 admin.site.register(Currency, CurrencyAdmin)

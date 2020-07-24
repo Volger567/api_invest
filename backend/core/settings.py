@@ -85,6 +85,72 @@ WSGI_APPLICATION = 'core.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/3.0/ref/settings/#databases
 
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '[%(asctime)s.%(msecs)03d] - %(message)s      ::%(levelname)s:%(name)s',
+            'datefmt': '%d/%b/%Y %H:%M:%S'
+        },
+        'simple': {
+            'format': '[%(asctime)s] %(message)s',
+            'datefmt': '%d/%b/%Y %H:%M:%S'
+        }
+    },
+    'filters': {
+
+    },
+    'handlers': {
+        'file': {
+            'level': 'INFO',
+            'class': 'logging.handlers.TimedRotatingFileHandler',
+            'filename': '/logs/tinkoff_investment.log',
+            'when': 'D',
+            'interval': 1,
+            'backupCount': 30,
+            'formatter': 'verbose'
+        },
+        'django': {
+            'level': 'INFO',
+            'class': 'logging.handlers.TimedRotatingFileHandler',
+            'filename': '/logs/tinkoff_investment_django.log',
+            'when': 'D',
+            'interval': 1,
+            'backupCount': 7,
+            'formatter': 'simple'
+        },
+        'console': {
+            'level': 'DEBUG',
+            'class': 'logging.StreamHandler',
+            'formatter': 'simple'
+        }
+    },
+    'loggers': {
+        'django.server': {
+            'handlers': ['django', 'console'],
+            'level': 'INFO',
+            'propagate': True
+        },
+        'users': {
+            'handlers': ['file', 'console'],
+            'level': 'INFO'
+        },
+        'api': {
+            'handlers': ['file', 'console'],
+            'level': 'INFO'
+        },
+        'market': {
+            'handlers': ['file', 'console'],
+            'level': 'INFO'
+        },
+        'tinkoff_api': {
+            'handlers': ['file', 'console'],
+            'level': 'INFO'
+        }
+    }
+}
+
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql_psycopg2',

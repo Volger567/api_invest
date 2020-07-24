@@ -78,12 +78,13 @@
       {% endblock %}
     </main>
     <div class="default-investment-account-fixed-label">
+      <span class="text-right float-right">
       {{ request.user.default_investment_account|default:'Инвестиционный счет не выбран' }}
       <br>
-      <span class="text-right float-right">
       {% for currency in currency_assets %}
         {{ currency.value|floatformat:2 }} {{ currency.currency.abbreviation }}<br>
       {% endfor %}
+      Последнее обновление: {{ request.user.default_investment_account.sync_at|date:"G:i:s" }}
       </span>
     </div>
   {% endblock %}

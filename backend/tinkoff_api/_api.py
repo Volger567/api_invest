@@ -1,4 +1,5 @@
 import datetime as dt
+import logging
 from functools import wraps
 from typing import Optional
 from urllib.parse import urljoin
@@ -8,6 +9,9 @@ import requests
 from tinkoff_api.annotations import TMarketStocks, TUserAccounts200, TOperations, TPortfolio, TPortfolioCurrencies
 from tinkoff_api.exceptions import PermissionDeniedError, UnauthorizedError, UnknownError, InvalidArgumentError, \
     InvalidTokenError
+
+
+logger = logging.getLogger(__name__)
 
 
 def only_with_production_token(func):
