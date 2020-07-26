@@ -17,7 +17,7 @@ services:
 
   web:
     build: backend/
-    command: "./wait-for-it.sh db:5432 -- ./run.sh"
+    command: "./entrypoint.sh db:5432 -- ./run.sh"
     env_file:
       - backend/.env
     volumes:

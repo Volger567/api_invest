@@ -5,5 +5,6 @@ RUN mkdir -p /logs
 RUN mkdir -p /code/backend
 COPY requirements.txt /code/backend
 WORKDIR /code/backend
+RUN pip install -U pip
 RUN pip install -r requirements.txt
 COPY . /code/backend

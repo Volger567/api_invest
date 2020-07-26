@@ -1,39 +1,59 @@
+import decimal
 import logging
 import os
+from typing import List
 
 from django.core.exceptions import ObjectDoesNotExist
 from django.db import models
 from django.db.models import Q, Subquery
 from rest_framework import status
-from rest_framework.generics import ListCreateAPIView, RetrieveUpdateDestroyAPIView
+from rest_framework.generics import RetrieveUpdateDestroyAPIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework.viewsets import ModelViewSet
 
-from api.permissions import HasDefaultInvestmentAccount, IsDefaultInvestmentAccountCreator
+from api.exceptions import TotalCapitalGrowThanMaxCapital, TotalDefaultShareGrowThan100
+from api.permissions import HasDefaultInvestmentAccount, IsDefaultInvestmentAccountCreator, \
+    CanRetrieveInvestmentAccount, IsInvestmentAccountCreator
 from api.serializers import InvestmentAccountSerializer, CoOwnerSerializer, ShareSerializer
-from api.exceptions import TotalCapitalGrowThanMaxCapital
 from market.models import Share, Operation
 from users.models import InvestmentAccount, Investor, CoOwner
-
 
 logger = logging.getLogger(__name__)
 
 
 # FIXME: сделать все сериализаторы и вьюхи по человечески
-class InvestmentAccountView(ListCreateAPIView):
-    """ Создание инвестиционных счетов и получения списка тех, которыми инвестор владеет """
-    permission_classes = (IsAuthenticated, )
+class InvestmentAccountView(ModelViewSet):
+    """ ИС"""
     serializer_class = InvestmentAccountSerializer
     queryset = InvestmentAccount.objects.all()
 
+    def get_permissions(self):
+        """ Получение списка permissions, в зависимости от действия.
+            create - быть авторизованным
+            retrieve - быть авторизованным и являться (со)владельцем ИС
+            list - быть авторизованным
+            update, partial_update, destroy - быть авторизованным и быть владельцем ИС
+        """
+        base_permissions = [IsAuthenticated]
+        permissions_by_action = {
+            'retrieve': [CanRetrieveInvestmentAccount],
+            'update': [IsInvestmentAccountCreator],
+            'partial_update': [IsInvestmentAccountCreator],
+            'destroy': [IsInvestmentAccountCreator]
+        }
+        base_permissions.extend(permissions_by_action.get(self.action, []))
+        return [permission() for permission in base_permissions]
+
     def list(self, request, *args, **kwargs):
+        """ Список ИС, владельцем которых является пользователь """
         return self.request.user.owned_investment_accounts
 
 
 class DefaultInvestmentAccountView(APIView):
-    """ Получение инвестиционного счета, установленного по умолчанию.
-        Установка инвестиционного счета как счета по умолчанию
+    """ Получение ИС, установленного по умолчанию.
+        Установка ИС как счета по умолчанию
     """
     permission_classes = (IsAuthenticated, )
 
@@ -122,18 +142,25 @@ class CoOwnersUpdateView(APIView):
         total_capital = 0
         # Совладельцы, которые будут изменены
         bulk_updates = []
+
+        total_default_share = sum(map(lambda x: decimal.Decimal(x['default_share']), request.data.get('co_owners')))
+        if total_default_share > 100:
+            raise TotalDefaultShareGrowThan100
         for co_owner_data in request.data.get('co_owners'):
             co_owner = CoOwner.objects.get(pk=co_owner_data['pk'], investment_account=updated_investment_account)
             co_owner_serialized = CoOwnerSerializer(
-                instance=co_owner, data=co_owner_data, partial=True
+                instance=co_owner, data=co_owner_data, partial=True,
+                context={'total_default_share': total_default_share}
             )
-            if co_owner_serialized.is_valid(raise_exception=True):
+            if co_owner_serialized.is_valid():
                 capital = co_owner_serialized.validated_data['capital']
                 default_share = co_owner_serialized.validated_data['default_share']
                 co_owner.capital = capital
                 co_owner.default_share = default_share
                 total_capital += capital
                 bulk_updates.append(co_owner)
+            else:
+                logger.warning(co_owner_serialized.errors)
         max_capital = updated_investment_account.prop_total_capital
         if total_capital > max_capital:
             raise TotalCapitalGrowThanMaxCapital

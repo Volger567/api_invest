@@ -104,7 +104,7 @@ class Share(models.Model):
         Operation, verbose_name='Операция', on_delete=models.CASCADE, related_name='shares')
     co_owner = models.ForeignKey(
         'users.CoOwner', verbose_name='Совладелец', on_delete=models.CASCADE, related_name='shares')
-    value = models.PositiveIntegerField(verbose_name='Доля')
+    value = models.DecimalField(verbose_name='Доля', max_digits=9, decimal_places=8)
 
     def __str__(self):
         return f'{self.co_owner.investor.username} ({self.value})'
@@ -194,8 +194,9 @@ class Deal(models.Model):
             .annotate(
                 total_shares=Sum('shares__value'),
                 price=ExpressionWrapper(F('payment')/F('quantity'), output_field=models.DecimalField())
-            )
+            ).order_by('date')
         )
+
         total_shares = collections.Counter()
         tmp_buy = (
             operations
@@ -237,9 +238,6 @@ class Deal(models.Model):
                 income = (average_buy_price + average_sell_price) * total_sold_quantity
                 # income *= Decimal(total_sold_quantity/total_bought_quantity)
                 income *= Decimal(share/total_bought_quantity)
-                if income > 0:
-                    # Налог 13%
-                    income *= Decimal(0.87)
                 income += total_bought_commission[co_owner]
                 income += share/total_bought_quantity * total_sold_commission
                 income += share/total_bought_quantity * dividend_income

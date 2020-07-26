@@ -1,0 +1,80 @@
+.operations {
+  width: 65%
+}
+
+.operation-new-day {
+  margin-top: 25px;
+  font-size: 1.15em;
+  color: rgb(20, 40, 100)
+}
+/* Блок операции */
+.operation-item {
+  margin-top: 6px;
+}
+.operation-item.income {
+  background-color: rgba(100, 255, 225, .2);
+  border-left: 3px solid green;
+}
+.operation-item.expense {
+  background-color: rgba(255, 100, 165, .2);
+  border-left: 3px double red;
+}
+
+.operation-item-shares {
+  color: rgba(120, 130, 200, .5);
+  font-size: .9em;
+  position: absolute;
+  top: 5px;
+  right: -205px;
+  width: 200px;
+}
+.edit-share {
+  cursor: pointer;
+}
+/* Дата операции */
+.operation-item-date {
+  color: rgba(20, 80, 150, .9);
+  font-weight: bold;
+  font-size: 1.2em;
+}
+.operation-item-type {
+  color: rgba(90, 0, 120, .9)
+}
+
+/* Оплата операции*/
+.operation-item-payment {
+  font-size: 1.25em;
+}
+.operation-item.income .operation-item-payment, .operation-item.income .operation-item-price {
+  color: rgba(0, 100, 0, .9)
+}
+.operation-item.expense .operation-item-payment, .operation-item.expense .operation-item-price {
+  color: rgba(150, 0, 0, .9);
+}
+/* Символ валюты */
+.operation-item-payment-abbreviation {
+  font-size: .95em;
+  margin-left: 3px;
+}
+/* Комиссия */
+.operation-item-commission {
+  font-size: 1.1em;
+  color: rgba(220, 0, 0, .7)
+}
+/* Ценная бумага */
+.operation-item-figi {
+  color: rgba(20, 80, 150, .9);
+  font-weight: bold;
+  font-size: 1.1em;
+  cursor: pointer;
+  max-width: 400px;
+  margin-top: 25px;
+}
+.operation-item-figi a {
+  text-decoration: none;
+}
+
+/* Если операций нет, будет показана ссылка на страницу инвестиционных счетов */
+.link-to-create-investment-account:hover {
+  text-decoration: none;
+}

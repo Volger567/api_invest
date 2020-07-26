@@ -25,7 +25,7 @@
               {% for share in operation.shares.all %}
                 <span class="edit-share"
                       data-pk="{{ share.pk }}" data-value="{{ share.value }}" data-investor="{{ share.co_owner.investor.username }}">
-                  &rfisht; {{ share.co_owner.investor.username }}: {{ share.value }}</span><br>
+                  &rfisht; {{ share.co_owner.investor.username }}: {{ share.value|floatformat:2 }}</span><br>
               {% endfor %}
               </div>
             {% endif %}

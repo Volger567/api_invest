@@ -68,7 +68,9 @@ $(document).ready(function() {
       let item = $(this);
       let coOwnerPk = item.data('co_owner_pk');
       let capital = item.find('.co-owner-capital input').val();
-      let defaultShare = item.find('.co-owner-default-share input').val();
+      if (capital === '')
+        capital = 0
+      let defaultShare = parseFloat(item.find('.co-owner-default-share input').val());
       coOwners.push({
         "pk": coOwnerPk,
         "capital": capital,
@@ -90,6 +92,9 @@ $(document).ready(function() {
       success: function () {
         window.location.reload()
       },
+      errors: function (err) {
+        alert(err.responseText)
+      }
     })
   }
   $('#save-co-owners').on('click', function(){

@@ -40,8 +40,8 @@
                            data-target="{{ co_owner.pk }}" value="{{ co_owner.capital|floatformat:2 }}" step="0.01">
                   </th>
                   <th class="co-owner-default-share">
-                    <input type="number" class="form-control" min="0"
-                           data-target="{{ co_owner.pk }}" value="{{ co_owner.default_share }}">
+                    <input type="number" class="form-control" min="0" max="100" step="0.01"
+                           data-target="{{ co_owner.pk }}" value="{{ co_owner.default_share|floatformat:2 }}">
                   </th>
                   <th class="co-owner-limit">{{ co_owner.limit|floatformat:2 }}</th>
                   <th class="co-owner-circulation"></th>

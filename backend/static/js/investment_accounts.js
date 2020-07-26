@@ -6,7 +6,7 @@ $(document).ready(function() {
     item.prop('disabled', true)
 
     $.post({
-      url: '/api/create-investment-account/',
+      url: '/api/investment-accounts/',
       headers: {
         'X-CSRFTOKEN': csrfToken
       },
@@ -18,15 +18,13 @@ $(document).ready(function() {
         window.location.reload()
       },
       error: function(xhr, status, error) {
+        item.prop('disabled', false)
         let errors = JSON.parse(xhr.responseText)
         for (let key in errors) {
           if (errors.hasOwnProperty(key))
             $(`#add-owned-investment-account-modal-${key}-error`).text(errors[key])
         }
       },
-      complete: function() {
-        item.prop('disabled', false)
-      }
     });
   })
 
@@ -53,13 +51,14 @@ $(document).ready(function() {
     e.stopPropagation()
     let parent = $(this).parent()
 
-    $.post({
-      url: '/api/remove-investment-account/',
+    $.ajax({
+      url: `/api/investment-accounts/${parent.data('uuid')}`,
+      method: 'delete',
       headers: {
         'X-CSRFTOKEN': csrfToken
       },
-      data: {
-        'value': parent.data('uuid')
+      error: function(xhr) {
+        alert(xhr.responseText)
       },
       complete: function () {
         parent.remove()

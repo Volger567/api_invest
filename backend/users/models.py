@@ -141,9 +141,13 @@ class InvestmentAccount(models.Model):
                     'instrument_type': operation.get('instrumentType', ''),
                     # Количество проданных, купленных ценных бумаг
                     'quantity': operation.get('quantity', 0),
-                    # Уникательный идентификатор ценной бумаги
-                    'figi': None if operation.get('figi') is None else Stock.objects.get(figi=operation['figi'])
                 })
+                # Уникальный идентификатор ценной бумаги
+                try:
+                    figi = None if operation.get('figi') is None else Stock.objects.get(figi=operation['figi'])
+                except models.ObjectDoesNotExist:
+                    figi = None
+                pre_bulk_create_operations[-1]['figi'] = figi
         # Список для bulk_create операции
         bulk_create_operations = []
         # Заносим в операции комиссию
@@ -167,7 +171,8 @@ class InvestmentAccount(models.Model):
             type__in=(
                 Operation.Types.BUY, Operation.Types.BUY_CARD, Operation.Types.TAX_DIVIDEND,
                 Operation.Types.DIVIDEND, Operation.Types.SELL,
-            )
+            ),
+            figi__isnull=False
         ).order_by('date')
         bulk_create_shares = []
         co_owners = self.co_owners.all().values_list('pk', 'default_share', named=True)
@@ -272,7 +277,7 @@ class CoOwner(models.Model):
     investment_account = models.ForeignKey(
         InvestmentAccount, verbose_name='Инвестиционный счет', on_delete=models.CASCADE, related_name='co_owners')
     capital = models.DecimalField(verbose_name='Капитал', max_digits=20, decimal_places=4, default=0)
-    default_share = models.PositiveIntegerField(verbose_name='Доля по умолчанию', default=0)
+    default_share = models.DecimalField(verbose_name='Доля по умолчанию', default=0, max_digits=9, decimal_places=8)
 
     def __str__(self):
         return f'{self.investor}, {self.investment_account.name}'
@@ -307,7 +312,7 @@ def investment_account_post_save(**kwargs):
         # Создатель счета становится одним из совладельцев счета
         co_owner = CoOwner.objects.create(
             investor=creator, investment_account=instance,
-            default_share=100, capital=0
+            default_share=1, capital=0
         )
 
         # Загружаем все операции из Тинькофф

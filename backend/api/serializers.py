@@ -1,3 +1,6 @@
+import logging
+
+from django.db.models import Sum
 from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
 
@@ -7,8 +10,11 @@ from tinkoff_api.exceptions import InvalidTokenError
 from users.models import InvestmentAccount, Investor, CoOwner
 
 
+logger = logging.getLogger(__name__)
+
+
 class InvestmentAccountSerializer(serializers.ModelSerializer):
-    """ Сериализатор для инвестиционного счета """
+    """ Сериализатор для ИС """
     class Meta:
         model = InvestmentAccount
         fields = ['id', 'name', 'creator', 'token', 'broker_account_id']
@@ -57,7 +63,15 @@ class CoOwnerSerializer(serializers.ModelSerializer):
         model = CoOwner
         fields = ('id', 'investor', 'investment_account', 'capital', 'default_share', 'is_creator')
 
+    default_share = serializers.DecimalField(max_digits=9, decimal_places=6, max_value=100, min_value=0)
     is_creator = serializers.BooleanField(read_only=True)
+
+    def validate_default_share(self, value):
+        if self.context.get('total_default_share') is not None:
+            return value/self.context['total_default_share']
+        elif 1 < value < 100:
+            return value / 100
+        return value
 
 
 class ShareSerializer(serializers.ModelSerializer):
@@ -65,3 +79,10 @@ class ShareSerializer(serializers.ModelSerializer):
     class Meta:
         model = Share
         fields = '__all__'
+
+    def validate_value(self, value):
+        if self.instance is not None:
+            total_share = self.instance.operation.shares.aggregate(s=Sum('value'))['s']
+            if total_share - self.instance.value + value > 1:
+                raise ValidationError('Доля не может быть такой большой')
+        return value

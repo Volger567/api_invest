@@ -36,7 +36,7 @@
                 </div>
                 <!-- Профит в % -->
                 <span class="deal-item-percent-profit">
-                  {{ deal.expected_percent_profit|floatformat:2 }}<span class="deal-item-percent-profit-abbreviation">%</span>
+                  {% if deal.expected_profit > 0 %}+{% endif %}{{ deal.expected_percent_profit|floatformat:2 }}<span class="deal-item-percent-profit-abbreviation">%</span>
                 </span>
                 <!-- Ценная бумага -->
                 <br>

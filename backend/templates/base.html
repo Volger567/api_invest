@@ -84,7 +84,9 @@
       {% for currency in currency_assets %}
         {{ currency.value|floatformat:2 }} {{ currency.currency.abbreviation }}<br>
       {% endfor %}
-      Последнее обновление: {{ request.user.default_investment_account.sync_at|date:"G:i:s" }}
+      {% if request.user.default_investment_account %}
+        Последнее обновление: {{ request.user.default_investment_account.sync_at|date:"G:i:s" }}
+      {% endif %}
       </span>
     </div>
   {% endblock %}

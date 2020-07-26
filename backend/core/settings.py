@@ -43,6 +43,7 @@ INSTALLED_APPS = [
 
     # 3-rd party
     'crispy_forms',
+    'django_extensions',
 
     # local
     'users.apps.UsersConfig',
@@ -127,7 +128,7 @@ LOGGING = {
         }
     },
     'loggers': {
-        'django.server': {
+        'django': {
             'handlers': ['django', 'console'],
             'level': 'INFO',
             'propagate': True
@@ -201,7 +202,7 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/3.0/howto/static-files/
 
-STATIC_URL = '/static/'
+STATIC_URL = '/staticfiles/'
 STATICFILES_DIRS = [
     os.path.join(BASE_DIR, 'static')
 ]
@@ -218,6 +219,3 @@ try:
     from .local_settings import *
 except ImportError:
     pass
-
-if DEBUG:
-    INSTALLED_APPS.append('django_extensions')

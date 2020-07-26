@@ -1,0 +1,143 @@
+/* prefixed by https://autoprefixer.github.io (PostCSS: v7.0.26, autoprefixer: v9.7.3) */
+
+/*
+ * Style tweaks
+ * --------------------------------------------------
+ */
+html,
+body {
+  overflow-x: hidden; /* Prevent scroll on narrow devices */
+  position: relative;
+  min-height: 100%;
+}
+body {
+  background-color: rgba(117, 17, 117, .05);
+  margin-bottom: 20px;
+  margin-top: 100px;
+}
+
+footer {
+}
+/*
+ * Off Canvas
+ * --------------------------------------------------
+ */
+@media screen and (max-width: 767px) {
+  .row-offcanvas {
+    position: relative;
+    -webkit-transition: all .25s ease-out;
+         -o-transition: all .25s ease-out;
+            transition: all .25s ease-out;
+  }
+
+  .row-offcanvas-right {
+    right: 0;
+  }
+
+  .row-offcanvas-left {
+    left: 0;
+  }
+
+  .row-offcanvas-right
+  .sidebar-offcanvas {
+    right: -50%; /* 6 columns */
+  }
+
+  .row-offcanvas-left
+  .sidebar-offcanvas {
+    left: -50%; /* 6 columns */
+  }
+
+  .row-offcanvas-right.active {
+    right: 50%; /* 6 columns */
+  }
+
+  .row-offcanvas-left.active {
+    left: 50%; /* 6 columns */
+  }
+
+  .sidebar-offcanvas {
+    position: absolute;
+    top: 0;
+    width: 50%; /* 6 columns */
+  }
+}
+
+/* CUSTOM STYLES */
+.container img.captcha {
+  margin-bottom: 12px;
+}
+
+.form-group {
+  text-align: center;
+}
+
+/* Название сайта */
+.navbar .navbar-brand, .navbar .navbar-brand:focus {
+  color: rgba(255, 200, 210, .8);
+}
+.navbar .navbar-brand {
+  transition: color .5s;
+}
+.navbar .navbar-brand:hover {
+  color: white;
+}
+
+/* Навигационная панель */
+.navbar {
+  background-color: rgba(11, 118, 194, .8);
+  border: 0;
+  padding: 0;
+  height: 65px;
+}
+
+/* Пункты меню */
+.navbar .navbar-nav .nav-item a {
+  color: rgba(255, 220, 210, .8);
+  transition: color .5s;
+  font-size: 19px;
+}
+
+.navbar .navbar-nav .nav-item:hover a {
+  color: rgba(255, 255, 255, .9);
+}
+
+.navbar .navbar-nav > .active > a,
+.navbar .navbar-nav > .active > a:focus,
+.navbar .navbar-nav > .active > a:hover {
+  transition: none;
+  color: rgba(255, 255, 255, 1)
+}
+
+.empty-links-text h1 {
+  color: #919f;
+}
+
+.empty-links-text h6 a {
+  text-decoration: None;
+  color: #a3af
+}
+
+/* Модальное окно изменения заголовка ссылки, полной ссылки */
+.save-modal, .label-modal {
+  background-color: #727c;
+  color: #fffe;
+}
+
+.save-modal:active, .save-modal:hover {
+  color: #ffff
+}
+
+#title-value-modal:focus, #full-link-value-modal:focus {
+  box-shadow: none;
+  border: 1px solid #a2b9;
+}
+
+
+.default-investment-account-fixed-label {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  color: rgba(50, 70, 250, .3);
+  cursor: default;
+}
