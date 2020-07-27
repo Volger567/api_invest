@@ -9,7 +9,6 @@ from tinkoff_api import TinkoffProfile
 from tinkoff_api.exceptions import InvalidTokenError
 from users.models import InvestmentAccount, Investor, CoOwner
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -32,8 +31,6 @@ class InvestmentAccountSerializer(serializers.ModelSerializer):
     def validate_token(self, value: str) -> str:
         """ Валидация токена. Токен должен быть валидным +
             давать доступ к реальному портфелю пользователя (а не к песочнице)
-        :param value: токен
-        :return: либо токен, либо raise ValidationError
         """
         try:
             with TinkoffProfile(value) as tp:
@@ -54,7 +51,23 @@ class InvestorSerializer(serializers.ModelSerializer):
     """ Сериализатор для инвесторов """
     class Meta:
         model = Investor
-        fields = ('id', 'username')
+        fields = ('id', 'username', 'default_investment_account')
+
+    def validate_default_investment_account(self, investment_account):
+        """ Валидация ИС по умолчанию.
+            Пользователь может установить ИС по умолчанию
+            только если является его владельцем или находится
+            в совладельцах этого ИС
+        """
+        if self.partial:
+            is_creator = investment_account in self.instance.owned_investment_accounts.all()
+            is_co_owner = self.instance.co_owned_investment_accounts.filter(
+                investment_account=investment_account).exists()
+            if is_creator or is_co_owner:
+                return investment_account
+            raise ValidationError('Вы не являетесь (со)владельцем счета')
+        else:
+            raise ValidationError('Изменить default_investment_account можно только PATCH запросом')
 
 
 class CoOwnerSerializer(serializers.ModelSerializer):

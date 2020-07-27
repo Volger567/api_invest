@@ -50,7 +50,7 @@ class InvestmentAccount(models.Model):
     name = models.CharField(verbose_name='Название счета', max_length=256)
     creator = models.ForeignKey(
         Investor, verbose_name='Создатель счета', on_delete=models.CASCADE,
-        related_name='owned_investor_accounts'
+        related_name='owned_investment_accounts'
     )
     token = models.CharField(verbose_name='Токен для торговли', max_length=128)
     broker_account_id = models.CharField(verbose_name='ID инвестиционного счета', max_length=50)
@@ -273,7 +273,7 @@ class CoOwner(models.Model):
 
     objects = CoOwnerManager()
     investor = models.ForeignKey(
-        Investor, verbose_name='Инвестор', on_delete=models.CASCADE, related_name='co_owned_investor_accounts')
+        Investor, verbose_name='Инвестор', on_delete=models.CASCADE, related_name='co_owned_investment_accounts')
     investment_account = models.ForeignKey(
         InvestmentAccount, verbose_name='Инвестиционный счет', on_delete=models.CASCADE, related_name='co_owners')
     capital = models.DecimalField(verbose_name='Капитал', max_digits=20, decimal_places=4, default=0)

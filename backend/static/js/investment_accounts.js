@@ -32,13 +32,15 @@ $(document).ready(function() {
   let investment_accounts = $('.investment-accounts li');
   investment_accounts.on('click', function(){
     let item = $(this);
-    $.post({
-      url: '/api/default-investment-account/',
+    const userPk = $('#request-user').val();
+    $.ajax({
+      url: `/api/investors/${userPk}`,
+      method: 'PATCH',
       headers: {
         'X-CSRFTOKEN': csrfToken
       },
       data: {
-        'value': item.data('uuid')
+        'default_investment_account': item.data('uuid')
       },
       success: function() {
         window.location.reload()

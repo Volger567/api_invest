@@ -1,7 +1,6 @@
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.views import LoginView as SuperLoginView, LogoutView as SuperLogoutView
-from django.db import models
-from django.db.models import Sum, F, ExpressionWrapper, Q
+from django.db.models import Sum, F, Q
 from django.urls import reverse
 from django.views.generic import FormView, TemplateView, ListView
 
@@ -55,12 +54,13 @@ class InvestmentAccountSettings(LoginRequiredMixin, UpdateInvestmentAccount, Lis
     def get_queryset(self):
         """ Получение списка совладельцев """
         if self.investment_account:
-            total_income = self.investment_account.prop_total_income
-            total_sharing = self.investment_account.co_owners.aggregate(Sum('default_share'))['default_share__sum']
             return (
                 self.investment_account.co_owners
                 .with_is_creator_annotations()
-                .annotate(limit=F('capital') + Sum('dealincome__value', filter=Q(investment_account=self.investment_account)))
+                .annotate(
+                    limit=F('capital') +
+                    Sum('dealincome__value', filter=Q(investment_account=self.investment_account)))
+                .order_by('-is_creator', 'investor__username')
             )
         return CoOwner.objects.none()
 

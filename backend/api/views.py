@@ -1,10 +1,11 @@
 import decimal
 import logging
 import os
+from collections import Iterable
+from typing import Dict
 
-from django.core.exceptions import ObjectDoesNotExist
 from django.db import models
-from django.db.models import Q, Subquery
+from django.db.models import Subquery
 from rest_framework import status
 from rest_framework.generics import RetrieveUpdateDestroyAPIView
 from rest_framework.permissions import IsAuthenticated
@@ -12,72 +13,55 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.viewsets import ModelViewSet
 
-from api.exceptions import TotalCapitalGrowThanMaxCapital, TotalDefaultShareGrowThan100
-from api.permissions import HasDefaultInvestmentAccount, IsDefaultInvestmentAccountCreator, \
-    IsInvestmentAccountCreator, IsInvestmentAccountCoOwner
-from api.serializers import InvestmentAccountSerializer, CoOwnerSerializer, ShareSerializer
 from market.models import Share, Operation
 from users.models import InvestmentAccount, Investor, CoOwner
+from .exceptions import TotalCapitalGrowThanMaxCapital, TotalDefaultShareGrowThan100
+from .permissions import HasDefaultInvestmentAccount, IsDefaultInvestmentAccountCreator, \
+    IsInvestmentAccountCreator, IsInvestmentAccountCoOwner, IsMe
+from .serializers import InvestmentAccountSerializer, CoOwnerSerializer, ShareSerializer, InvestorSerializer
 
 logger = logging.getLogger(__name__)
 
 
-# FIXME: сделать все сериализаторы и вьюхи по человечески
-class InvestmentAccountView(ModelViewSet):
+class PermissionsByActionMixin:
+    """ Получение permissions в зависимости от action """
+    # noinspection PyUnresolvedReferences
+    permissions_by_action: Dict[str, 'BasePermission'] = {}
+
+    def get_permissions(self):
+        # noinspection PyUnresolvedReferences
+        permissions = self.permissions_by_action.get(self.action, [])
+        if not isinstance(permissions, Iterable):
+            permissions = [permissions]
+        return [permission() for permission in permissions]
+
+
+class InvestorView(RetrieveUpdateDestroyAPIView):
+    """ Инвестор """
+    permission_classes = [IsMe]
+    serializer_class = InvestorSerializer
+    queryset = Investor.objects.all()
+
+
+class InvestmentAccountView(PermissionsByActionMixin, ModelViewSet):
     """ ИС"""
     serializer_class = InvestmentAccountSerializer
     queryset = InvestmentAccount.objects.all()
-
-    def get_permissions(self):
-        """ Получение списка permissions, в зависимости от действия.
-            create - быть авторизованным
-            retrieve - быть авторизованным и являться (со)владельцем ИС
-            list - быть авторизованным
-            update, partial_update, destroy - быть авторизованным и быть владельцем ИС
-        """
-        permissions_by_action = {
-            'create': [IsAuthenticated],
-            'retrieve': [IsInvestmentAccountCreator | IsInvestmentAccountCoOwner],
-            'list': [IsAuthenticated],
-            'update': [IsInvestmentAccountCreator],
-            'partial_update': [IsInvestmentAccountCreator],
-            'destroy': [IsInvestmentAccountCreator]
-        }
-        return [permission() for permission in permissions_by_action[self.action]]
+    permissions_by_action = {
+        'create': IsAuthenticated,
+        'retrieve': IsInvestmentAccountCreator | IsInvestmentAccountCoOwner,
+        'list': IsAuthenticated,
+        'update': IsInvestmentAccountCreator,
+        'partial_update': IsInvestmentAccountCreator,
+        'destroy': IsInvestmentAccountCreator
+    }
 
     def list(self, request, *args, **kwargs):
         """ Список ИС, владельцем которых является пользователь """
-        return self.request.user.owned_investment_accounts
+        return self.request.user.owned_investment_accounts.all()
 
 
-class DefaultInvestmentAccountView(APIView):
-    """ Получение ИС, установленного по умолчанию.
-        Установка ИС как счета по умолчанию
-    """
-    permission_classes = (IsAuthenticated, )
-
-    def get(self, request, *args, **kwargs):
-        return Response(
-            InvestmentAccountSerializer(request.user.default_investment_account).data,
-            status=status.HTTP_200_OK
-        )
-
-    def post(self, request, *args, **kwargs):
-        """ Установка инвестиционного счета по умолчанию """
-        try:
-            investment_account = (
-                InvestmentAccount.objects
-                .filter(Q(creator=request.user) | Q(co_owners__investor=request.user)).distinct()
-                .get(pk=request.POST.get('value'))
-            )
-            request.user.default_investment_account = investment_account
-            request.user.save(update_fields=('default_investment_account', ))
-        except ObjectDoesNotExist:
-            return Response(status=status.HTTP_403_FORBIDDEN)
-        else:
-            return Response(status=status.HTTP_202_ACCEPTED)
-
-
+# FIXME: сделать все сериализаторы и вьюхи по человечески
 class SearchForCoOwnersView(APIView):
     """ Поиск пользователя по началу username """
     permission_classes = (IsAuthenticated, HasDefaultInvestmentAccount)

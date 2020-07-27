@@ -9,7 +9,7 @@
 {% block content %}
   <div class="owned-investment-accounts text-center">
   <h2>Ваши инвестиционные счета</h2>
-
+  <input type="hidden" value="{{ request.user.pk }}" id="request-user">
   {% if owned_investment_accounts %}
     <ul class="list-group w-50 m-auto owned-investment-accounts investment-accounts">
       {% for account in owned_investment_accounts %}

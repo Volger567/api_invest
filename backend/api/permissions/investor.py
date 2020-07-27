@@ -1,6 +1,12 @@
 from rest_framework.permissions import IsAuthenticated
 
 
+class IsMe(IsAuthenticated):
+    """ Является ли пользователь конкретным пользователем """
+    def has_object_permission(self, request, view, obj):
+        return request.user == obj
+
+
 class HasDefaultInvestmentAccount(IsAuthenticated):
     """ Установлен ли у пользователя ИС по умолчанию """
     def has_permission(self, request, view):
@@ -20,10 +26,10 @@ class IsDefaultInvestmentAccountCreator(IsAuthenticated):
 class IsInvestmentAccountCreator(IsAuthenticated):
     """ Является ли пользователь владельцем конкретного ИС """
     def has_object_permission(self, request, view, obj):
-        return obj in request.user.owned_investor_accounts.all()
+        return obj in request.user.owned_investment_accounts.all()
 
 
 class IsInvestmentAccountCoOwner(IsAuthenticated):
     """ Является ли пользователь совладельцем конкретного ИС """
     def has_object_permission(self, request, view, obj):
-        return request.user.co_owned_investor_accounts.filter(investment_account=obj).exists()
+        return request.user.co_owned_investment_accounts.filter(investment_account=obj).exists()
