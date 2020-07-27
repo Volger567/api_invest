@@ -1,4 +1,4 @@
-from rest_framework.permissions import BasePermission, IsAuthenticated
+from rest_framework.permissions import IsAuthenticated
 
 
 class HasDefaultInvestmentAccount(IsAuthenticated):
@@ -23,13 +23,7 @@ class IsInvestmentAccountCreator(IsAuthenticated):
         return obj in request.user.owned_investor_accounts.all()
 
 
-class CanRetrieveInvestmentAccount(BasePermission):
-    """ Может ли пользователь получить конкретный ИС """
+class IsInvestmentAccountCoOwner(IsAuthenticated):
+    """ Является ли пользователь совладельцем конкретного ИС """
     def has_object_permission(self, request, view, obj):
-        """ Пользователь может получить только тот ИС,
-            совладельцем или владельцем которого он является
-        """
-        return (
-            obj in request.user.owned_investment_accounts.all() or
-            request.user.co_owned_investor_accounts.filter(investment_account=obj).exists()
-        )
+        return request.user.co_owned_investor_accounts.filter(investment_account=obj).exists()

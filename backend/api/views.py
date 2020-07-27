@@ -1,7 +1,6 @@
 import decimal
 import logging
 import os
-from typing import List
 
 from django.core.exceptions import ObjectDoesNotExist
 from django.db import models
@@ -15,7 +14,7 @@ from rest_framework.viewsets import ModelViewSet
 
 from api.exceptions import TotalCapitalGrowThanMaxCapital, TotalDefaultShareGrowThan100
 from api.permissions import HasDefaultInvestmentAccount, IsDefaultInvestmentAccountCreator, \
-    CanRetrieveInvestmentAccount, IsInvestmentAccountCreator
+    IsInvestmentAccountCreator, IsInvestmentAccountCoOwner
 from api.serializers import InvestmentAccountSerializer, CoOwnerSerializer, ShareSerializer
 from market.models import Share, Operation
 from users.models import InvestmentAccount, Investor, CoOwner
@@ -36,15 +35,15 @@ class InvestmentAccountView(ModelViewSet):
             list - быть авторизованным
             update, partial_update, destroy - быть авторизованным и быть владельцем ИС
         """
-        base_permissions = [IsAuthenticated]
         permissions_by_action = {
-            'retrieve': [CanRetrieveInvestmentAccount],
+            'create': [IsAuthenticated],
+            'retrieve': [IsInvestmentAccountCreator | IsInvestmentAccountCoOwner],
+            'list': [IsAuthenticated],
             'update': [IsInvestmentAccountCreator],
             'partial_update': [IsInvestmentAccountCreator],
             'destroy': [IsInvestmentAccountCreator]
         }
-        base_permissions.extend(permissions_by_action.get(self.action, []))
-        return [permission() for permission in base_permissions]
+        return [permission() for permission in permissions_by_action[self.action]]
 
     def list(self, request, *args, **kwargs):
         """ Список ИС, владельцем которых является пользователь """
