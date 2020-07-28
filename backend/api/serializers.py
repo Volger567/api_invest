@@ -12,6 +12,39 @@ from users.models import InvestmentAccount, Investor, CoOwner
 logger = logging.getLogger(__name__)
 
 
+class ExtendedInvestorSerializer(serializers.ModelSerializer):
+    """ Расширенный сериализатор для инвестора """
+    class Meta:
+        model = Investor
+        fields = ('id', 'username', 'default_investment_account')
+
+    def validate_default_investment_account(self, investment_account):
+        """ Валидация ИС по умолчанию.
+            Пользователь может установить ИС по умолчанию
+            только если является его владельцем или находится
+            в совладельцах этого ИС
+        """
+        if self.partial:
+            is_creator = investment_account in self.instance.owned_investment_accounts.all()
+            is_co_owner = self.instance.co_owned_investment_accounts.filter(
+                investment_account=investment_account).exists()
+            if is_creator or is_co_owner:
+                return investment_account
+            raise ValidationError('Вы не являетесь (со)владельцем счета')
+        else:
+            raise ValidationError('Изменить default_investment_account можно только PATCH запросом')
+
+
+class SimplifiedInvestorSerializer(serializers.ModelSerializer):
+    """ Упощенный сериализатор для инвестора.
+        При получении информации другими инвесторами,
+        используется он
+    """
+    class Meta:
+        model = Investor
+        fields = ('id', 'username')
+
+
 class InvestmentAccountSerializer(serializers.ModelSerializer):
     """ Сериализатор для ИС """
     class Meta:
@@ -24,7 +57,7 @@ class InvestmentAccountSerializer(serializers.ModelSerializer):
     def get_field_names(self, *args, **kwargs):
         """ Пользователь не должен получать поле token """
         fields = super().get_field_names(*args, **kwargs)
-        if self.instance is not None and self.data is None:
+        if self.instance is not None and not hasattr(self, 'initial_data'):
             fields.remove('token')
         return fields
 
@@ -45,29 +78,6 @@ class InvestmentAccountSerializer(serializers.ModelSerializer):
         validated_data['creator']: 'Investor' = self.context['request'].user
         validated_data['broker_account_id']: str = self.context['broker_account_id']
         return super().create(validated_data)
-
-
-class InvestorSerializer(serializers.ModelSerializer):
-    """ Сериализатор для инвесторов """
-    class Meta:
-        model = Investor
-        fields = ('id', 'username', 'default_investment_account')
-
-    def validate_default_investment_account(self, investment_account):
-        """ Валидация ИС по умолчанию.
-            Пользователь может установить ИС по умолчанию
-            только если является его владельцем или находится
-            в совладельцах этого ИС
-        """
-        if self.partial:
-            is_creator = investment_account in self.instance.owned_investment_accounts.all()
-            is_co_owner = self.instance.co_owned_investment_accounts.filter(
-                investment_account=investment_account).exists()
-            if is_creator or is_co_owner:
-                return investment_account
-            raise ValidationError('Вы не являетесь (со)владельцем счета')
-        else:
-            raise ValidationError('Изменить default_investment_account можно только PATCH запросом')
 
 
 class CoOwnerSerializer(serializers.ModelSerializer):

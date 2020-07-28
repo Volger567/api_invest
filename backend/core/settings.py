@@ -44,6 +44,8 @@ INSTALLED_APPS = [
     # 3-rd party
     'crispy_forms',
     'django_extensions',
+    'rest_framework',
+    'django_filters',
 
     # local
     'users.apps.UsersConfig',
@@ -214,6 +216,12 @@ LOGIN_REDIRECT_URL = 'index'
 LOGIN_URL = 'login'
 
 CRISPY_TEMPLATE_PACK = 'bootstrap4'
+
+REST_FRAMEWORK = {
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.IsAuthenticated',
+    ]
+}
 
 try:
     from .local_settings import *

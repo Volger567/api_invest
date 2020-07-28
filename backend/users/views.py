@@ -37,7 +37,11 @@ class InvestmentAccountsView(LoginRequiredMixin, UpdateInvestmentAccount, Templa
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['owned_investment_accounts'] = InvestmentAccount.objects.filter(creator=self.request.user)
+        context['owned_investment_accounts'] = (
+            InvestmentAccount.objects
+            .filter(creator=self.request.user)
+            .order_by('pk')
+        )
         context['co_owned_investment_accounts'] = (
             InvestmentAccount.objects
             .filter(co_owners__investor=self.request.user)

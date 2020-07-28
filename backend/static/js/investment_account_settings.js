@@ -2,6 +2,8 @@ $(document).ready(function() {
   let timer;
   const maxCapital = $('#total-capital').val();
   const csrfToken = $('meta[name="csrf-token"]').prop('content')
+
+  // При написании символа в строку поиска инвесторов
   $('#add-co-owners').on('keyup', function(){
     let item = $(this)
     let investorsElement = $('#found-investors')
@@ -13,13 +15,10 @@ $(document).ready(function() {
         return
       }
       $.get({
-        url: '/api/search-investors/',
+        url: `/api/investors/?search=${item.val()}`,
         dataType: 'json',
         headers : {
           'X-CSRFTOKEN': csrfToken
-        },
-        data: {
-          'username': item.val()
         },
         success: function(data) {
           investorsElement.text('')
