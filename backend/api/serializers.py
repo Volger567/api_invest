@@ -1,4 +1,5 @@
 import logging
+import os
 
 from django.db.models import Sum
 from rest_framework import serializers
@@ -86,8 +87,22 @@ class CoOwnerSerializer(serializers.ModelSerializer):
         model = CoOwner
         fields = ('id', 'investor', 'investment_account', 'capital', 'default_share', 'is_creator')
 
-    default_share = serializers.DecimalField(max_digits=9, decimal_places=6, max_value=100, min_value=0)
+    default_share = serializers.DecimalField(max_digits=9, decimal_places=6, min_value=0, max_value=100)
+    investor = serializers.PrimaryKeyRelatedField(
+        many=True, queryset=Investor.objects.exclude(username=os.getenv('PROJECT_SUPERUSER_USERNAME')),
+    )
     is_creator = serializers.BooleanField(read_only=True)
+
+    def validate_investor(self, investor):
+        if self.context['request'].user == investor:
+            raise ValidationError('Вы не можете назначить себя совладельцем, вы уже им являетесь')
+        return investor
+
+    def validate_investment_account(self, investment_account):
+        if self.context['request'].user == investment_account.creator:
+            return investment_account
+        else:
+            raise ValidationError('Вы не можете добавить совладельца к ИС, владельцем которого не являетесь')
 
     def validate_default_share(self, value):
         if self.context.get('total_default_share') is not None:

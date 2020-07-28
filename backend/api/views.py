@@ -8,7 +8,6 @@ from django.db import models
 from rest_framework import status
 from rest_framework.filters import SearchFilter
 from rest_framework.generics import RetrieveUpdateDestroyAPIView
-from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.viewsets import ModelViewSet
@@ -16,7 +15,7 @@ from rest_framework.viewsets import ModelViewSet
 from market.models import Share, Operation
 from users.models import InvestmentAccount, Investor, CoOwner
 from .exceptions import TotalCapitalGrowThanMaxCapital, TotalDefaultShareGrowThan100
-from .permissions import InvestorPermissions, CoOwnerPermissions
+from .permissions import RequestUserPermissions
 from .serializers import InvestmentAccountSerializer, CoOwnerSerializer, \
     ShareSerializer, SimplifiedInvestorSerializer, ExtendedInvestorSerializer
 
@@ -40,9 +39,9 @@ class InvestorView(PermissionsByActionMixin, ModelViewSet):
     """ Инвестор """
     queryset = Investor.objects.filter(is_active=True)
     permissions_by_action = {
-        'update': InvestorPermissions.IsSelf,
-        'partial_update': InvestorPermissions.IsSelf,
-        'destroy': InvestorPermissions.IsSelf
+        'update': RequestUserPermissions.IsSpecificInvestor,
+        'partial_update': RequestUserPermissions.IsSpecificInvestor,
+        'destroy': RequestUserPermissions.IsSpecificInvestor
     }
     filter_backends = [SearchFilter]
     search_fields = ['^username']
@@ -52,11 +51,9 @@ class InvestorView(PermissionsByActionMixin, ModelViewSet):
             сделал запрос и суперпользователь будут отсутствовать в выдаче
         """
         queryset = super().filter_queryset(queryset)
-        if self.action == 'list':
-            return queryset.exclude(
-                username__in=(os.getenv('PROJECT_SUPERUSER_USERNAME'), self.request.user.username)
-            )
-        return queryset
+        return queryset.exclude(
+            username__in=(os.getenv('PROJECT_SUPERUSER_USERNAME'), self.request.user.username)
+        )
 
     def get_serializer(self, *args, **kwargs):
         """ Расширенный сериализатор возвращается в том случае,
@@ -67,7 +64,11 @@ class InvestorView(PermissionsByActionMixin, ModelViewSet):
         if self.action in ('create', 'update', 'partial_update', 'destroy'):
             return ExtendedInvestorSerializer(*args, **kwargs)
         elif self.action == 'retrieve':
-            if InvestorPermissions.IsSelf().has_object_permission(self.request, self, self.get_object()):
+            has_permission = (
+                RequestUserPermissions.IsSpecificInvestor()
+                .has_object_permission(self.request, self, self.get_object())
+            )
+            if has_permission:
                 return ExtendedInvestorSerializer(*args, **kwargs)
         return SimplifiedInvestorSerializer(*args, **kwargs)
 
@@ -76,10 +77,13 @@ class InvestmentAccountView(PermissionsByActionMixin, ModelViewSet):
     """ ИС """
     serializer_class = InvestmentAccountSerializer
     permissions_by_action = {
-        'retrieve': InvestorPermissions.IsInvestmentAccountCreator | InvestorPermissions.IsInvestmentAccountCoOwner,
-        'update': InvestorPermissions.IsInvestmentAccountCreator,
-        'partial_update': InvestorPermissions.IsInvestmentAccountCreator,
-        'destroy': InvestorPermissions.IsInvestmentAccountCreator
+        'retrieve': (
+            RequestUserPermissions.IsCreatorOfSpecificInvestmentAccount |
+            RequestUserPermissions.IsCoOwnerOfSpecificInvestmentAccount
+        ),
+        'update': RequestUserPermissions.IsCreatorOfSpecificInvestmentAccount,
+        'partial_update': RequestUserPermissions.IsCreatorOfSpecificInvestmentAccount,
+        'destroy': RequestUserPermissions.IsCreatorOfSpecificInvestmentAccount
     }
 
     def filter_queryset(self, queryset):
@@ -89,20 +93,31 @@ class InvestmentAccountView(PermissionsByActionMixin, ModelViewSet):
 
 
 class CoOwnerView(PermissionsByActionMixin, ModelViewSet):
+    """ Совладелец """
     serializer_class = CoOwnerSerializer
     permissions_by_action = {
-        'retrieve': CoOwnerPermissions.IsInvestmentAccountCreator | CoOwnerPermissions.IsInvestorCoOwner,
-        'list': InvestorPermissions.HasDefaultInvestmentAccount,
-        'update': CoOwnerPermissions.IsInvestmentAccountCreator,
-        'partial_update': CoOwnerPermissions.IsInvestmentAccountCreator,
-        'destroy': CoOwnerPermissions.IsInvestmentAccountCreator | CoOwnerPermissions.IsInvestorCoOwner
+        'retrieve': (
+            RequestUserPermissions.IsInvestmentAccountCreatorOfCoOwner |
+            RequestUserPermissions.IsSpecificCoOwner
+        ),
+        'list': RequestUserPermissions.HasDefaultInvestmentAccount,
+        'update': RequestUserPermissions.IsInvestmentAccountCreatorOfCoOwner,
+        'partial_update': RequestUserPermissions.IsInvestmentAccountCreatorOfCoOwner,
+        'destroy': (
+            RequestUserPermissions.IsInvestmentAccountCreatorOfCoOwner |
+            RequestUserPermissions.IsSpecificCoOwner
+        )
     }
+
+    def filter_queryset(self, queryset):
+        queryset = super().filter_queryset(queryset)
+        return queryset.filter(investment_account=self.request.user.default_investment_account)
 
 
 # FIXME: сделать все сериализаторы и вьюхи по человечески
 class CoOwnersView(APIView):
     """ Совладельцы ИС """
-    permission_classes = (IsAuthenticated, InvestorPermissions.HasDefaultInvestmentAccount)
+    permission_classes = (RequestUserPermissions.HasDefaultInvestmentAccount, )
 
     def post(self, request, *args, **kwargs):
         """ Добавление совладельца """
@@ -133,7 +148,7 @@ class CoOwnersView(APIView):
 
 
 class CoOwnersUpdateView(APIView):
-    permission_classes = (IsAuthenticated, InvestorPermissions.IsDefaultInvestmentAccountCreator)
+    permission_classes = (RequestUserPermissions.IsCreatorOfDefaultInvestmentAccount, )
 
     def post(self, request, *args, **kwargs):
         """ Изменение капитала и доли по умолчанию совладельцев """
@@ -195,7 +210,7 @@ class CoOwnersUpdateView(APIView):
 
 class ShareView(RetrieveUpdateDestroyAPIView):
     """ Доли совладельцев в операциях """
-    permission_classes = (IsAuthenticated, InvestorPermissions.IsDefaultInvestmentAccountCreator)
+    permission_classes = (RequestUserPermissions.IsCreatorOfDefaultInvestmentAccount, )
     serializer_class = ShareSerializer
     queryset = Share.objects.all()
 

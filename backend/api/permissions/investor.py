@@ -1,11 +1,11 @@
 from rest_framework.permissions import IsAuthenticated
 
 
-# XXX: рефактор нужен, тяжело понять какие права для чего
-class InvestorPermissions:
-    class IsSelf(IsAuthenticated):
-        """ Является ли пользователь конкретным пользователем """
-        def has_object_permission(self, request, view, obj):
+class RequestUserPermissions:
+    # noinspection PyUnresolvedReferences
+    class IsSpecificInvestor(IsAuthenticated):
+        """ Является ли пользователь конкретным инвестором """
+        def has_object_permission(self, request, view, obj: 'Investor'):
             return request.user == obj
 
     class HasDefaultInvestmentAccount(IsAuthenticated):
@@ -13,26 +13,35 @@ class InvestorPermissions:
         def has_permission(self, request, view):
             return request.user.default_investment_account is not None
 
-    class IsDefaultInvestmentAccountCreator(IsAuthenticated):
+    # noinspection PyUnresolvedReferences
+    class IsCreatorOfDefaultInvestmentAccount(IsAuthenticated):
         """ Является ли пользователь владельцем ИС,
             который установлен у него по умолчанию
         """
         def has_permission(self, request, view):
-            # noinspection PyUnresolvedReferences
             investment_account: 'InvestmentAccount' = request.user.default_investment_account
             return investment_account and request.user == investment_account.creator
 
-    class IsInvestmentAccountCreator(IsAuthenticated):
+    # noinspection PyUnresolvedReferences
+    class IsCreatorOfSpecificInvestmentAccount(IsAuthenticated):
         """ Является ли пользователь владельцем конкретного ИС """
-        def has_object_permission(self, request, view, obj):
-            return obj in request.user.owned_investment_accounts.all()
+        def has_object_permission(self, request, view, obj: 'InvestmentAccount'):
+            return request.user == obj.creator
 
-    class IsInvestmentAccountCoOwner(IsAuthenticated):
+    # noinspection PyUnresolvedReferences
+    class IsCoOwnerOfSpecificInvestmentAccount(IsAuthenticated):
         """ Является ли пользователь совладельцем конкретного ИС """
-        def has_object_permission(self, request, view, obj):
+        def has_object_permission(self, request, view, obj: 'InvestmentAccount'):
             return request.user.co_owned_investment_accounts.filter(investment_account=obj).exists()
 
-    class IsInvestorCoOwner(IsAuthenticated):
-        """ Является ли инвестор конкретным совладельцем """
-        def has_object_permission(self, request, view, obj):
+    # noinspection PyUnresolvedReferences
+    class IsSpecificCoOwner(IsAuthenticated):
+        """ Является ли пользователь конкретным совладельцем """
+        def has_object_permission(self, request, view, obj: 'CoOwner'):
             return request.user == obj.investor
+
+    # noinspection PyUnresolvedReferences
+    class IsInvestmentAccountCreatorOfCoOwner(IsAuthenticated):
+        """ Является ли пользователь создателем ИС конкретного совладельца """
+        def has_object_permission(self, request, view, obj: 'CoOwner'):
+            return request.user == obj.investment_account.creator
