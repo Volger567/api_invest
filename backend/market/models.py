@@ -54,6 +54,7 @@ class Operation(models.Model):
         DIVIDEND = 'Dividend', 'Получение дивидендов'
         BROKER_COMMISSION = 'BrokerCommission', 'Комиссия брокера'
         SERVICE_COMMISSION = 'ServiceCommission', 'Комиссия за обслуживание'
+        MARGIN_COMMISSION = 'MarginCommission', 'Комиссия за маржинальную торговлю'
         TAX = 'Tax', 'Налог'
         TAX_BACK = 'TaxBack', 'Налоговый вычет/корректировка налога'
         TAX_DIVIDEND = 'TaxDividend', 'Налог на дивиденды'

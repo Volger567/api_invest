@@ -174,6 +174,18 @@ class TOperationPayloadServiceCommissionOperation(TypedDict):
     id: str
 
 
+class TOperationPayloadMarginCommission(TypedDict):
+    """ Операция 'Комиссия за маржинальную торговлю' """
+    operationType: str  # сегда MarginCommission
+    date: str
+    isMarginCall: bool
+    quantity: int
+    payment: int
+    currency: str
+    status: str
+    id: str
+
+
 class TOperationPayloadTaxOperation(TypedDict):
     """ Операция 'Налог' """
     operationType: str  # Всегда Tax
@@ -211,21 +223,24 @@ class TOperationPayloadTaxDividendOperation(TypedDict):
     id: str
 
 
+TOperationsPayloadOperations = List[Union[
+    TOperationsPayloadPayOutOperation,  # Вывод средств с инвестиционного счета
+    TOperationPayloadPayInOperation,  # Пополнение инвестиционного счета
+    TOperationPayloadBuyOperation,  # Покупка ценных бумаг с инвестиционного счета
+    TOperationPayloadBuyCardOperation,  # Покупка ценных бумаг с карты
+    TOperationsPayloadSellOperation,  # Продажа
+    TOperationPayloadDividendOperation,  # Дивиденды
+    TOperationsPayloadBrokerCommissionOperation,  # Комиссия брокера
+    TOperationPayloadServiceCommissionOperation,  # Комиссия за обслуживание
+    TOperationPayloadMarginCommission,  # Комиссия за маржинальную торговлю
+    TOperationPayloadTaxOperation,  # Налог
+    TOperationPayloadTaxBackOperation,  # Налоговый вычет/корректировка налога
+    TOperationPayloadTaxDividendOperation  # Налог на дивиденды
+]]
+
+
 class TOperationsPayload(TypedDict):
-    # Существует несколько типов операций
-    operations: List[Union[
-        TOperationsPayloadPayOutOperation,  # Вывод средств с инвестиционного счета
-        TOperationPayloadPayInOperation,  # Пополнение инвестиционного счета
-        TOperationPayloadBuyOperation,  # Покупка ценных бумаг с инвестиционного счета
-        TOperationPayloadBuyCardOperation,  # Покупка ценных бумаг с карты
-        TOperationsPayloadSellOperation,  # Продажа
-        TOperationPayloadDividendOperation,  # Дивиденды
-        TOperationsPayloadBrokerCommissionOperation,  # Комиссия брокера
-        TOperationPayloadServiceCommissionOperation,  # Комиссия за обслуживание
-        TOperationPayloadTaxOperation,  # Налог
-        TOperationPayloadTaxBackOperation,  # Налоговый вычет/корректировка налога
-        TOperationPayloadTaxDividendOperation  # Налог на дивиденды
-    ]]
+    operations: TOperationsPayloadOperations
 
 
 class TOperations(TBaseResponse):
@@ -276,4 +291,3 @@ class TPortfolioCurrenciesPayload(TypedDict):
 class TPortfolioCurrencies(TBaseResponse):
     """ Валютные активы """
     payload: TPortfolioCurrenciesPayload
-

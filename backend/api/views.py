@@ -6,6 +6,7 @@ from typing import Dict
 
 from django.db import models
 from rest_framework import status
+from rest_framework.decorators import action
 from rest_framework.filters import SearchFilter
 from rest_framework.generics import RetrieveUpdateDestroyAPIView
 from rest_framework.response import Response
@@ -112,6 +113,10 @@ class CoOwnerView(PermissionsByActionMixin, ModelViewSet):
     def filter_queryset(self, queryset):
         queryset = super().filter_queryset(queryset)
         return queryset.filter(investment_account=self.request.user.default_investment_account)
+
+    @action(detail=False, methods=['patch'])
+    def multiple_update(self, request):
+        pass
 
 
 # FIXME: сделать все сериализаторы и вьюхи по человечески

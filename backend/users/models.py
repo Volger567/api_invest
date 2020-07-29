@@ -16,6 +16,7 @@ from core import settings
 from market.models import Operation, Currency, Stock, Deal, Share, DealIncome
 from tinkoff_api import TinkoffProfile
 from tinkoff_api.exceptions import InvalidTokenError
+from users.services import operations_service
 
 logger = logging.getLogger(__name__)
 
@@ -93,14 +94,14 @@ class InvestmentAccount(models.Model):
 
     def update_operations(self):
         """ Обновление списка операций и сделок """
-        # TODO: отдать это celery
         # Получаем список операций в диапазоне
         # от даты последнего получения операций минус 12 часов до текущего момента
-        with TinkoffProfile(self.token) as tp:
-            project_timezone = pytz.timezone(settings.TIME_ZONE)
-            from_datetime = self.sync_at - datetime.timedelta(hours=12)
-            to_datetime = datetime.datetime.now(tz=pytz.timezone(settings.TIME_ZONE))
-            operations = tp.operations(from_datetime, to_datetime)['payload']['operations']
+        logger.info('Обновление операций')
+        project_timezone = pytz.timezone(settings.TIME_ZONE)
+        from_datetime = self.sync_at - datetime.timedelta(hours=12)
+        to_datetime = datetime.datetime.now(tz=pytz.timezone(settings.TIME_ZONE))
+        operations = operations_service.get_operations_from_tinkoff_api(self.token, from_datetime, to_datetime)
+        logger.info('Операции получены')
 
         # Тут будет храниться список всех операций
         pre_bulk_create_operations: List[Dict[str, Any]] = []
@@ -110,16 +111,24 @@ class InvestmentAccount(models.Model):
         currencies = Currency.objects.all()
 
         for operation in operations:
+            logger.info(f'Обрабатываем операцию: {operation}')
             operation_date = project_timezone.localize(
                 dateutil.parser.isoparse(operation['date']).replace(tzinfo=None)
             )
             # Будем брать только успешные операции
+            if operation['status'] != Operation.Statuses.DONE:
+                logger.info('Статус операции не равен DONE')
+                continue
             # Если операция - комиссия брокера, добавляем в словарь комиссий
-            if operation['operationType'] == Operation.Types.BROKER_COMMISSION and \
-                    operation['status'] == Operation.Statuses.DONE:
+            if operation['operationType'] == Operation.Types.BROKER_COMMISSION:
+                logger.info('Комиссия брокера, добавляем в словарь комиссий')
                 commissions[operation_date] = operation
             # Во всех других случаях, добавляем в список операций
-            elif operation['status'] == Operation.Statuses.DONE:
+            else:
+                # XXX:
+                if operation['operationType'] == Operation.Types.MARGIN_COMMISSION:
+                    logger.info('Комиссия за маржу')
+                    continue
                 pre_bulk_create_operations.append({
                     # Инвестиционный счет, которому принадлежит операция
                     'investment_account': self,

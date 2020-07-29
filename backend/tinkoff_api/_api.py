@@ -96,8 +96,7 @@ class TinkoffProfile:
         self.broker_account_id: Optional[str] = None
 
     def auth(self, first='production') -> str:
-        """
-            Авторизация по токену
+        """ Авторизация по токену
         :param first: Какой метод авторизации будет первым (production/sandbox).
             Если авторизация не пройдет успешно, будет попытка вызвать другой метод
         """
@@ -142,6 +141,31 @@ class TinkoffProfile:
     @only_authorized
     @generate_url
     def operations(self, from_datetime: dt.datetime, to_datetime: dt.datetime, url: str) -> TOperations:
+        """ Парсинг операций из tinkoff API в определенном временном интервале
+        :param from_datetime: дата начала промежутка
+        :param to_datetime: дата конца промежутка
+        :param url: куда отправлять запрос
+        :return: список операций
+        """
+        logger.info(f'Собираемся обновлять операции от {from_datetime.isoformat()} до {to_datetime.isoformat()}')
+        self._check_date_range(from_datetime, to_datetime)
+        response = self.response_to_json(self._session.get(
+            url, data={
+                'from': from_datetime.isoformat(),
+                'to': to_datetime.isoformat()
+            }
+        ))
+        logger.info('Операции получены')
+        return response
+
+    def _check_date_range(self, from_datetime: dt.datetime, to_datetime: dt.datetime) -> True:
+        """ Проверка дат на корректность.
+            from_datetime должна быть меньше to_datetime,
+            обе даты должны быть типа datetime, и иметь timezone
+        :param from_datetime: начало промежутка
+        :param to_datetime: конец промежутка
+        :return: True или raise InvalidArgumentError
+        """
         if not (isinstance(from_datetime, dt.datetime) and isinstance(to_datetime, dt.datetime)):
             raise InvalidArgumentError('Аргументы from_datetime и to_datetime должны быть типа datetime')
         if from_datetime >= to_datetime:
@@ -151,13 +175,6 @@ class TinkoffProfile:
         if not (callable(getattr(from_datetime, 'isoformat', None)) and
                 callable(getattr(to_datetime, 'isoformat', None))):
             raise InvalidArgumentError('Аргументы from_datetime и to_datetime должны иметь метод isoformat')
-        response = self.response_to_json(self._session.get(
-            url, data={
-                'from': from_datetime.isoformat(),
-                'to': to_datetime.isoformat()
-            }
-        ))
-        return response
 
     @only_authorized
     @generate_url

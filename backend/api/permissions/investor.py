@@ -2,6 +2,7 @@ from rest_framework.permissions import IsAuthenticated
 
 
 class RequestUserPermissions:
+    """ Разрешения для пользователя, который выполняет запрос """
     # noinspection PyUnresolvedReferences
     class IsSpecificInvestor(IsAuthenticated):
         """ Является ли пользователь конкретным инвестором """
