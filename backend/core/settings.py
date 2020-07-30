@@ -46,6 +46,7 @@ INSTALLED_APPS = [
     'django_extensions',
     'rest_framework',
     'django_filters',
+    'polymorphic',
 
     # local
     'users.apps.UsersConfig',

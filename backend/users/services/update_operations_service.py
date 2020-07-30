@@ -4,7 +4,7 @@
 """
 import datetime as dt
 import logging
-from typing import List
+from typing import List, NoReturn
 
 from market.models import Currency, Operation
 from tinkoff_api import TinkoffProfile
@@ -36,5 +36,4 @@ def generate_bulk_create_operations(operations: TOperationsPayloadOperations, in
     :return: список с объектами Operation
     """
     currencies = Currency.objects.all()
-
-    # TODO:
+    # TODO

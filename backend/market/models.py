@@ -32,65 +32,6 @@ class Currency(models.Model):
         return self.name
 
 
-class Operation(models.Model):
-    class Meta:
-        verbose_name = 'Операция'
-        verbose_name_plural = 'Операции'
-        ordering = ('date', )
-        constraints = [
-            models.UniqueConstraint(fields=('type', 'date', 'investment_account'), name='unique operation')
-        ]
-
-    class Statuses(models.TextChoices):
-        DONE = 'Done', 'Выполнено'
-        DECLINE = 'Decline', 'Отказано'
-
-    class Types(models.TextChoices):
-        PAY_OUT = 'PayOut', 'Вывод средств'
-        PAY_IN = 'PayIn', 'Пополнение счета'
-        BUY = 'Buy', 'Покупка ценных бумаг'
-        BUY_CARD = 'BuyCard', 'Покупка ценных бумаг с банковской карты'
-        SELL = 'Sell', 'Продажа ценных бумаг'
-        DIVIDEND = 'Dividend', 'Получение дивидендов'
-        BROKER_COMMISSION = 'BrokerCommission', 'Комиссия брокера'
-        SERVICE_COMMISSION = 'ServiceCommission', 'Комиссия за обслуживание'
-        MARGIN_COMMISSION = 'MarginCommission', 'Комиссия за маржинальную торговлю'
-        TAX = 'Tax', 'Налог'
-        TAX_BACK = 'TaxBack', 'Налоговый вычет/корректировка налога'
-        TAX_DIVIDEND = 'TaxDividend', 'Налог на дивиденды'
-
-    investment_account = models.ForeignKey(
-        'users.InvestmentAccount', verbose_name='Инвестиционный счет', on_delete=models.CASCADE,
-        related_name='operations'
-    )
-    type = models.CharField(verbose_name='Тип', max_length=30, choices=Types.choices)
-    date = models.DateTimeField(verbose_name='Дата')
-    is_margin_call = models.BooleanField(default=False)
-    payment = models.DecimalField(verbose_name='Оплата', max_digits=20, decimal_places=4)
-    currency = models.ForeignKey(Currency, verbose_name='Валюта', on_delete=models.SET_NULL, null=True)
-
-    status = models.CharField(verbose_name='Статус', choices=Statuses.choices, max_length=16)
-    secondary_id = models.CharField(verbose_name='ID', max_length=32)
-
-    # Для операций покупки, продажи и комиссии
-    instrument_type = models.CharField(verbose_name='Тип инструмента', max_length=32, blank=True)
-    quantity = models.PositiveIntegerField(verbose_name='Количество', default=0)
-    figi = models.ForeignKey('Stock', verbose_name='Ценная бумага', on_delete=models.PROTECT, null=True)
-
-    commission = models.DecimalField(verbose_name='Комиссия', max_digits=16, decimal_places=4, null=True)
-
-    deal = models.ForeignKey(
-        'Deal', verbose_name='Сделка', on_delete=models.SET_NULL,
-        null=True, related_name='operations')
-
-    @property
-    def friendly_type_format(self):
-        return dict(Operation.Types.choices)[self.type]
-
-    def __str__(self):
-        return f'{self.friendly_type_format} ({self.investment_account} - {self.date})'
-
-
 class Share(models.Model):
     """ Отражает долю совладельца в каждой операции """
     class Meta:
