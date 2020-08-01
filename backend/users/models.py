@@ -100,7 +100,9 @@ class InvestmentAccount(models.Model):
         project_timezone = pytz.timezone(settings.TIME_ZONE)
         from_datetime = self.sync_at - datetime.timedelta(hours=12)
         to_datetime = datetime.datetime.now(tz=pytz.timezone(settings.TIME_ZONE))
-        operations = update_operations_service.get_operations_from_tinkoff_api(self.token, from_datetime, to_datetime)
+        operations = update_operations_service.get_operations_from_tinkoff_api(
+            self.token, project_timezone, from_datetime, to_datetime
+        )
         logger.info('Операции получены')
 
         # Тут будет храниться список всех операций

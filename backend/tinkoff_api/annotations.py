@@ -108,31 +108,17 @@ class TOperationPayloadBuyOperation(TypedDict):
     price: float
     payment: float
     currency: str
-    # В отличие от продажи, комиссия для покупки расчитывается отдельно
-    # поэтому ключа commission нет
-    trades: List[TOperationsPayloadOperationTrade]
-    status: str
-    id: str
-
-
-TOperationPayloadBuyCardOperation = TOperationPayloadBuyOperation
-
-
-class TOperationsPayloadSellOperation(TypedDict):
-    """ Операции 'Продажа' """
-    operationType: str  # Вседга Sell
-    date: str
-    isMarginCall: bool
-    instrumentType: str
-    figi: str
-    quantity: int
-    price: float
-    payment: float
-    currency: str
     commission: TOperationsPayloadOperationCommission
     trades: List[TOperationsPayloadOperationTrade]
     status: str
     id: str
+
+
+# Операция 'Продажа ценных бумаг'
+TOperationsPayloadSellOperation = TOperationPayloadBuyOperation
+
+
+TOperationPayloadBuyCardOperation = TOperationPayloadBuyOperation
 
 
 class TOperationPayloadDividendOperation(TypedDict):

@@ -4,9 +4,18 @@ from decimal import Decimal
 from django.db import models
 from django.db.models import Sum, F, Q, Case, When, ExpressionWrapper, Avg
 from django.db.models.functions import Coalesce
+from polymorphic.models import PolymorphicModel
+
+from operations.models import Sale, Purchase, Dividend
 
 
-class Currency(models.Model):
+class InstrumentType(PolymorphicModel):
+    class Meta:
+        verbose_name = 'Торговый инструмент'
+        verbose_name_plural = 'Торговые инструменты'
+
+
+class Currency(InstrumentType):
     """ Валюты, в которых могут проводиться операции """
     class Meta:
         verbose_name = 'Валюта'
@@ -15,11 +24,6 @@ class Currency(models.Model):
     # iso_code не primary_key потому что у валют он может меняться
     iso_code = models.CharField(verbose_name='Код', max_length=3, unique=True)
     abbreviation = models.CharField(verbose_name='Знак', max_length=16)
-    # Можно было бы выражать в степенях 10,
-    # но не во всех валютах количество субвалюты в валюте можно выразить в виде степени 10
-    number_to_basic = models.PositiveSmallIntegerField(
-        verbose_name='Количество меньшей валюты в большей', default=100
-    )
     name = models.CharField(verbose_name='Название', max_length=120)
 
     def save(self, *args, **kwargs):
@@ -32,46 +36,27 @@ class Currency(models.Model):
         return self.name
 
 
-class Share(models.Model):
-    """ Отражает долю совладельца в каждой операции """
+class Stock(InstrumentType):
+    """ Ценная акция на рынке """
     class Meta:
-        verbose_name = 'Доля в операции'
-        verbose_name_plural = 'Доли в операциях'
-        constraints = [
-            models.UniqueConstraint(fields=('operation', 'co_owner'), name='unique_co_owner_op')
-        ]
-        ordering = ['pk']
+        verbose_name = 'Акция'
+        verbose_name_plural = 'Акции'
 
-    operation = models.ForeignKey(
-        Operation, verbose_name='Операция', on_delete=models.CASCADE, related_name='shares')
-    co_owner = models.ForeignKey(
-        'users.CoOwner', verbose_name='Совладелец', on_delete=models.CASCADE, related_name='shares')
-    value = models.DecimalField(verbose_name='Доля', max_digits=9, decimal_places=8)
+    figi = models.CharField(verbose_name='FIGI', max_length=32, unique=True)
+    ticker = models.CharField(verbose_name='Ticker', max_length=16, unique=True)
+    isin = models.CharField(verbose_name='ISIN', max_length=32)
+    min_price_increment = models.DecimalField(verbose_name='Шаг цены', max_digits=10, decimal_places=4, default=0)
+    lot = models.PositiveIntegerField(verbose_name='шт/лот')
+    currency = models.ForeignKey(Currency, verbose_name='Валюта', on_delete=models.CASCADE)
+    name = models.CharField(verbose_name='Название', max_length=250)
 
     def __str__(self):
-        return f'{self.co_owner.investor.username} ({self.value})'
-
-
-class Transaction(models.Model):
-    """ В одной операции покупки/продажи может быть несколько транзакций,
-        так бывает когда заявки реализуются по частям, а не сразу
-    """
-    class Meta:
-        verbose_name = 'Транзакции'
-        verbose_name_plural = 'Транзакции'
-        constraints = [
-            models.UniqueConstraint(fields=['secondary_id'], condition=~Q(secondary_id='-1'), name='unique_sec_id')
-        ]
-
-    secondary_id = models.CharField(verbose_name='ID', max_length=32)
-    date = models.DateTimeField(verbose_name='Дата')
-    quantity = models.PositiveIntegerField(verbose_name='Количество шт.')
-    price = models.DecimalField(verbose_name='Цена/шт.', max_digits=20, decimal_places=4)
+        return self.name
 
 
 class DealQuerySet(models.QuerySet):
-    _sell_filter = Q(operations__type=Operation.Types.SELL)
-    _buy_filter = Q(operations__type__in=(Operation.Types.BUY, Operation.Types.BUY_CARD))
+    _sell_filter = Q(instance_of=Sale)
+    _buy_filter = Q(instance_of=Purchase)
 
     def _with_buys_sells_annotations(self):
         return self.annotate(
@@ -142,7 +127,7 @@ class Deal(models.Model):
         total_shares = collections.Counter()
         tmp_buy = (
             operations
-            .filter(type__in=(Operation.Types.BUY, Operation.Types.BUY_CARD))
+            .instance_of(Purchase)
             .aggregate(q=Sum('quantity'))
         )
         total_bought_quantity = tmp_buy['q']
@@ -150,7 +135,7 @@ class Deal(models.Model):
         total_paid = collections.Counter()
         tmp_sell = (
             operations
-            .filter(type=Operation.Types.SELL)
+            .instance_of(Sale)
             .aggregate(avg=Avg('price'), q=Sum('quantity'), commission=Sum('commission'))
         )
         average_sell_price = tmp_sell['avg']
@@ -158,13 +143,14 @@ class Deal(models.Model):
         total_sold_commission = tmp_sell['commission']
         dividend_income = (
             operations
-            .filter(type__in=(Operation.Types.DIVIDEND, Operation.Types.TAX_DIVIDEND))
-            .aggregate(income=Coalesce(Sum('payment'), 0))['income']
+            .instance_of(Dividend)
+            .aggregate(income=Coalesce(Sum('payment') + Sum('tax'), 0))['income']
         )
-        for operation in operations.filter(type__in=(Operation.Types.BUY, Operation.Types.BUY_CARD)):
+        for operation in operations.instance_of(Purchase):
             for share in operation.shares.all():
                 total_shares[share.co_owner] += Decimal(share.value/operation.total_shares*operation.quantity)
-                total_paid[share.co_owner] += Decimal(share.value/operation.total_shares*operation.quantity) * operation.price
+                total_paid[share.co_owner] += \
+                    Decimal(share.value/operation.total_shares*operation.quantity) * operation.price
                 total_bought_commission[share.co_owner] += operation.commission * share.value/operation.total_shares
 
         DealIncome.objects.exclude(co_owner__in=total_shares).delete()
@@ -206,21 +192,3 @@ class DealIncome(models.Model):
 
     def __str__(self):
         return f'{self.deal}: {self.co_owner} ({self.value})'
-
-
-class Stock(models.Model):
-    """ Ценная акция на рынке """
-    class Meta:
-        verbose_name = 'Акция'
-        verbose_name_plural = 'Акции'
-
-    figi = models.CharField(verbose_name='FIGI', max_length=32, unique=True)
-    ticker = models.CharField(verbose_name='Ticker', max_length=16, unique=True)
-    isin = models.CharField(verbose_name='ISIN', max_length=32)
-    min_price_increment = models.DecimalField(verbose_name='Шаг цены', max_digits=10, decimal_places=4, default=0)
-    lot = models.PositiveIntegerField(verbose_name='шт/лот')
-    currency = models.ForeignKey(Currency, verbose_name='Валюта', on_delete=models.CASCADE)
-    name = models.CharField(verbose_name='Название', max_length=250)
-
-    def __str__(self):
-        return self.name

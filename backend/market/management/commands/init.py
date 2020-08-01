@@ -21,30 +21,29 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         """ Создает дефолтные записи в моделях валюты и ценных бумаг """
-
+        logger.info('Создаем валюты')
         currencies = (
-            {
-                'iso_code': 'RUB',
-                'abbreviation': chr(8381),
-                'number_to_basic': 100,
-                'name': 'Российский рубль'
-            },
-            {
-                'iso_code': 'USD',
-                'abbreviation': chr(36),
-                'number_to_basic': 100,
-                'name': 'Американский доллар'
-            },
-            {
-                'iso_code': 'EUR',
-                'abbreviation': chr(8364),
-                'number_to_basic': 100,
-                'name': 'Евро'
-            }
+            ('RUB', chr(8381), 'Российский рубль'),
+            ('USD', chr(36), 'Американский доллар'),
+            ('EUR', chr(8364), 'Евро'),
+            ('GBP', chr(163), 'Фунт стерлингов'),
+            ('HKD', 'HK'+chr(36), 'Гонконгский доллар'),
+            ('CHF', chr(8355), 'Швейцарский франк'),
+            ('JPY', chr(165), 'Японская иена'),
+            ('CNY', chr(165),  'Китайский юань'),
+            ('TRY', chr(8378), 'Турецкая лира')
         )
+        currencies = [Currency(iso_code=iso, abbreviation=abbr, name=name) for iso, abbr, name in currencies]
+        Currency.objects.bulk_create(currencies, ignore_conflicts=True)
+        Currency.objects.bulk_update(currencies)
+        logger.info('Валюты созданы')
+
+        logger.info('Создаем супер-пользователя')
         user_model = get_user_model()
-        if not user_model.objects.filter(is_superuser=True, is_staff=True).exists():
-            print('Супер-пользователь не существует, создаем')
+        # Создаем суперпользователя из конфига, если такого не существует
+        if user_model.objects.filter(is_superuser=True, is_staff=True).exists():
+            logger.info('Супер-пользователь уже существует')
+        else:
             superuser = user_model.objects.create(
                 username=os.getenv('PROJECT_SUPERUSER_USERNAME'),
                 email=os.getenv('PROJECT_SUPERUSER_EMAIL'),
@@ -53,20 +52,11 @@ class Command(BaseCommand):
             )
             superuser.set_password(os.getenv('PROJECT_SUPERUSER_PASSWORD'))
             superuser.save()
-        for c in currencies:
-            obj, created = Currency.objects.get_or_create(
-                iso_code=c['iso_code'],
-                defaults=c
-            )
-            if created:
-                print(f'Валюта {c["iso_code"]} была создана')
-            else:
-                print(f'Валюта {c["iso_code"]} уже существует')
+            logger.info(f'Супер-пользователь "{superuser.username}" создан')
 
         token = os.getenv('tinkoff_api_production_token') or os.getenv('tinkoff_api_sandbox_token')
-        tp = TinkoffProfile(token)
-        tp.auth()
-        stocks = tp.market_stocks()
+        with TinkoffProfile(token) as tp:
+            stocks = tp.market_stocks()
         db_currencies = Currency.objects.all()
         if options['with_update']:
             for stock in stocks['payload']['instruments']:
