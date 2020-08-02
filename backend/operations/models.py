@@ -17,9 +17,7 @@ class InstrumentMixin(models.Model):
     class Meta:
         abstract = True
 
-    instrument_type = models.CharField(verbose_name='Тип инструмента', max_length=32)
-    # TODO: Stock -> Figi
-    figi = models.ForeignKey('Stock', verbose_name='Ценная бумага', on_delete=models.PROTECT)
+    instrument = models.ForeignKey('market.InstrumentType', verbose_name='Ценная бумага', on_delete=models.PROTECT)
 
 
 class PositivePaymentMixin(models.Model):
@@ -66,6 +64,18 @@ class Operation(PolymorphicModel):
     is_margin_call = models.BooleanField(default=False)
     payment = models.DecimalField(verbose_name='Оплата', max_digits=20, decimal_places=4)
     currency = models.ForeignKey(Currency, verbose_name='Валюта', on_delete=models.PROTECT)
+
+
+class PayInOperation(Operation):
+    class Meta:
+        verbose_name = 'Пополнение средств'
+        verbose_name_plural = 'Пополнения средств'
+
+
+class PayOutOperation(Operation):
+    class Meta:
+        verbose_name = 'Вывод средств'
+        verbose_name_plural = 'Выводы средств'
 
 
 class PurchaseAndSaleOperation(Operation, InstrumentMixin, DealMixin):
@@ -133,18 +143,6 @@ class MarginCommissionOperation(CommissionOperation):
     class Meta:
         verbose_name = 'Комиссия за маржинальную торговлю'
         verbose_name_plural = 'Комиссии за маржинальную торговлю'
-
-
-class PayInOperation(Operation):
-    class Meta:
-        verbose_name = 'Пополнение средств'
-        verbose_name_plural = 'Пополнения средств'
-
-
-class PayOutOperation(Operation):
-    class Meta:
-        verbose_name = 'Вывод средств'
-        verbose_name_plural = 'Выводы средств'
 
 
 class TaxOperation(Operation):

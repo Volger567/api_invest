@@ -23,17 +23,20 @@ class Command(BaseCommand):
         """ Создает дефолтные записи в моделях валюты и ценных бумаг """
         logger.info('Создаем валюты')
         currencies = (
-            ('RUB', chr(8381), 'Российский рубль'),
-            ('USD', chr(36), 'Американский доллар'),
-            ('EUR', chr(8364), 'Евро'),
-            ('GBP', chr(163), 'Фунт стерлингов'),
-            ('HKD', 'HK'+chr(36), 'Гонконгский доллар'),
-            ('CHF', chr(8355), 'Швейцарский франк'),
-            ('JPY', chr(165), 'Японская иена'),
-            ('CNY', chr(165),  'Китайский юань'),
-            ('TRY', chr(8378), 'Турецкая лира')
+            ('RUB', chr(8381), 'Российский рубль', ''),
+            ('USD', chr(36), 'Американский доллар', 'BBG0013HGFT4'),
+            ('EUR', chr(8364), 'Евро', 'BBG0013HJJ31', ''),
+            ('GBP', chr(163), 'Фунт стерлингов', ''),
+            ('HKD', 'HK'+chr(36), 'Гонконгский доллар', ''),
+            ('CHF', chr(8355), 'Швейцарский франк', ''),
+            ('JPY', chr(165), 'Японская иена', ''),
+            ('CNY', chr(165),  'Китайский юань', ''),
+            ('TRY', chr(8378), 'Турецкая лира', '')
         )
-        currencies = [Currency(iso_code=iso, abbreviation=abbr, name=name) for iso, abbr, name in currencies]
+        currencies = [
+            Currency(iso_code=iso, abbreviation=abbr, name=name, figi=figi)
+            for iso, abbr, name, figi in currencies
+        ]
         Currency.objects.bulk_create(currencies, ignore_conflicts=True)
         Currency.objects.bulk_update(currencies)
         logger.info('Валюты созданы')

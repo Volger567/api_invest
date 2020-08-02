@@ -6,13 +6,18 @@ from django.db.models import Sum, F, Q, Case, When, ExpressionWrapper, Avg
 from django.db.models.functions import Coalesce
 from polymorphic.models import PolymorphicModel
 
-from operations.models import Sale, Purchase, Dividend
+from operations.models import SaleOperation, PurchaseOperation, DividendOperation
 
 
 class InstrumentType(PolymorphicModel):
     class Meta:
         verbose_name = 'Торговый инструмент'
         verbose_name_plural = 'Торговые инструменты'
+
+    class Types(models.TextChoices):
+        STOCK = 'Stock', 'Акция'
+        CURRENCY = 'Currency', 'Валюта'
+        # TODO: Еще Bond, Etf
 
 
 class Currency(InstrumentType):
@@ -21,6 +26,7 @@ class Currency(InstrumentType):
         verbose_name = 'Валюта'
         verbose_name_plural = 'Валюты'
 
+    figi = models.CharField('figi', max_length=32, default='')
     # iso_code не primary_key потому что у валют он может меняться
     iso_code = models.CharField(verbose_name='Код', max_length=3, unique=True)
     abbreviation = models.CharField(verbose_name='Знак', max_length=16)
@@ -55,8 +61,8 @@ class Stock(InstrumentType):
 
 
 class DealQuerySet(models.QuerySet):
-    _sell_filter = Q(instance_of=Sale)
-    _buy_filter = Q(instance_of=Purchase)
+    _sell_filter = Q(instance_of=SaleOperation)
+    _buy_filter = Q(instance_of=PurchaseOperation)
 
     def _with_buys_sells_annotations(self):
         return self.annotate(
@@ -127,7 +133,7 @@ class Deal(models.Model):
         total_shares = collections.Counter()
         tmp_buy = (
             operations
-            .instance_of(Purchase)
+            .instance_of(PurchaseOperation)
             .aggregate(q=Sum('quantity'))
         )
         total_bought_quantity = tmp_buy['q']
@@ -135,7 +141,7 @@ class Deal(models.Model):
         total_paid = collections.Counter()
         tmp_sell = (
             operations
-            .instance_of(Sale)
+            .instance_of(SaleOperation)
             .aggregate(avg=Avg('price'), q=Sum('quantity'), commission=Sum('commission'))
         )
         average_sell_price = tmp_sell['avg']
@@ -143,10 +149,10 @@ class Deal(models.Model):
         total_sold_commission = tmp_sell['commission']
         dividend_income = (
             operations
-            .instance_of(Dividend)
+            .instance_of(DividendOperation)
             .aggregate(income=Coalesce(Sum('payment') + Sum('tax'), 0))['income']
         )
-        for operation in operations.instance_of(Purchase):
+        for operation in operations.instance_of(PurchaseOperation):
             for share in operation.shares.all():
                 total_shares[share.co_owner] += Decimal(share.value/operation.total_shares*operation.quantity)
                 total_paid[share.co_owner] += \

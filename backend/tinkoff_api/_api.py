@@ -6,7 +6,6 @@ from urllib.parse import urljoin
 
 import requests
 
-from tinkoff_api.annotations import TMarketStocks, TUserAccounts200, TOperations, TPortfolio, TPortfolioCurrencies
 from tinkoff_api.exceptions import PermissionDeniedError, UnauthorizedError, UnknownError, InvalidArgumentError, \
     InvalidTokenError
 
@@ -117,7 +116,7 @@ class TinkoffProfile:
             )
             if response.status_code == 200:
                 # FIXME: может быть несколько аккаунтов
-                response_json: TUserAccounts200 = response.json()
+                response_json = response.json()
                 self.broker_account_id: str = response_json['payload']['accounts'][0]['brokerAccountId']
                 self.is_sandbox_token_valid = self.broker_account_id.startswith('SB')
                 self.is_production_token_valid = not self.is_sandbox_token_valid
@@ -135,12 +134,12 @@ class TinkoffProfile:
 
     @only_authorized
     @generate_url
-    def market_stocks(self, url: str) -> TMarketStocks:
+    def market_stocks(self, url: str):
         return self.response_to_json(self._session.get(url))
 
     @only_authorized
     @generate_url
-    def operations(self, from_datetime: dt.datetime, to_datetime: dt.datetime, url: str) -> TOperations:
+    def operations(self, from_datetime: dt.datetime, to_datetime: dt.datetime, url: str):
         """ Парсинг операций из tinkoff API в определенном временном интервале
         :param from_datetime: дата начала промежутка
         :param to_datetime: дата конца промежутка
@@ -178,12 +177,12 @@ class TinkoffProfile:
 
     @only_authorized
     @generate_url
-    def portfolio(self, url: str) -> TPortfolio:
+    def portfolio(self, url: str):
         return self.response_to_json(self._session.get(url))
 
     @only_authorized
     @generate_url
-    def portfolio_currencies(self, url: str) -> TPortfolioCurrencies:
+    def portfolio_currencies(self, url: str):
         return self.response_to_json(self._session.get(url))
 
     def response_to_json(self, response):
