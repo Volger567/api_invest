@@ -52,6 +52,7 @@ INSTALLED_APPS = [
     # local
     'users.apps.UsersConfig',
     'market.apps.MarketConfig',
+    'operations.apps.OperationsConfig'
 ]
 
 MIDDLEWARE = [

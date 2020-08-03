@@ -13,7 +13,9 @@ from django.db.models.signals import post_save
 from django.dispatch import receiver
 
 from core import settings
-from market.models import Operation, Currency, Stock, Deal, Share, DealIncome
+from market.models import Currency, Stock, Deal, DealIncome
+from operations.models import PayInOperation, PayOutOperation, ServiceCommissionOperation, PurchaseOperation, \
+    SaleOperation
 from tinkoff_api import TinkoffProfile
 from tinkoff_api.exceptions import InvalidTokenError
 from users.services import update_operations_service
@@ -73,8 +75,8 @@ class InvestmentAccount(models.Model):
             (F('operations__payment')+F('operations__commission'))/F('operations__quantity'),
             output_field=models.DecimalField()
         )
-        only_buy = Q(operations__type__in=(Operation.Types.BUY, Operation.Types.BUY_CARD))
-        only_sell = Q(operations__type=Operation.Types.SELL)
+        only_buy = Q(instance_of=PurchaseOperation)
+        only_sell = Q(instance_of=SaleOperation)
         avg_sum = Avg(f_price, filter=only_buy) + Avg(f_price, filter=only_sell)
         pieces_sold = Sum('operations__quantity', filter=only_sell)
         opened_deals_total_income = (
@@ -85,12 +87,9 @@ class InvestmentAccount(models.Model):
 
     @property
     def prop_total_capital(self):
-        # FIXME: сделать для всех валют
-        return (
-            self.operations
-            .filter(type__in=(Operation.Types.PAY_IN, Operation.Types.PAY_OUT, Operation.Types.SERVICE_COMMISSION))
-            .aggregate(Sum('payment'))['payment__sum']
-        )
+        """ Расчет общего капитала для всего ИС """
+        # XXX:
+        return 0
 
     def update_operations(self):
         """ Обновление списка операций и сделок """

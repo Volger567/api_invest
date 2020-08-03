@@ -147,7 +147,7 @@ class TinkoffProfile:
         :return: список операций
         """
         logger.info(f'Собираемся обновлять операции от {from_datetime.isoformat()} до {to_datetime.isoformat()}')
-        self._check_date_range(from_datetime, to_datetime)
+        self.check_date_range(from_datetime, to_datetime)
         response = self.response_to_json(self._session.get(
             url, data={
                 'from': from_datetime.isoformat(),
@@ -157,7 +157,8 @@ class TinkoffProfile:
         logger.info('Операции получены')
         return response
 
-    def _check_date_range(self, from_datetime: dt.datetime, to_datetime: dt.datetime) -> True:
+    @staticmethod
+    def check_date_range(from_datetime: dt.datetime, to_datetime: dt.datetime) -> True:
         """ Проверка дат на корректность.
             from_datetime должна быть меньше to_datetime,
             обе даты должны быть типа datetime, и иметь timezone
@@ -171,6 +172,8 @@ class TinkoffProfile:
             raise InvalidArgumentError('Аргумент from_datetime должен быть меньше аргумента to_datetime')
         if getattr(from_datetime, 'tzinfo', None) is None or getattr(to_datetime, 'tzinfo', None) is None:
             raise InvalidArgumentError('Аргументы from_datetime и to_datetime должны быть с timezone')
+        if from_datetime.tzinfo != to_datetime.tzinfo:
+            raise InvalidArgumentError('Временная зона должна быть одинаковой')
         if not (callable(getattr(from_datetime, 'isoformat', None)) and
                 callable(getattr(to_datetime, 'isoformat', None))):
             raise InvalidArgumentError('Аргументы from_datetime и to_datetime должны иметь метод isoformat')

@@ -2,14 +2,12 @@ from django.core.validators import MaxValueValidator
 from django.db import models
 from polymorphic.models import PolymorphicModel
 
-from market.models import Currency
-
 
 class DealMixin(models.Model):
     class Meta:
         abstract = True
 
-    deal = models.ForeignKey('Deal', verbose_name='Сделка', on_delete=models.PROTECT,
+    deal = models.ForeignKey('market.Deal', verbose_name='Сделка', on_delete=models.PROTECT,
                              null=True, related_name='operations')
 
 
@@ -63,7 +61,7 @@ class Operation(PolymorphicModel):
     date = models.DateTimeField(verbose_name='Дата')
     is_margin_call = models.BooleanField(default=False)
     payment = models.DecimalField(verbose_name='Оплата', max_digits=20, decimal_places=4)
-    currency = models.ForeignKey(Currency, verbose_name='Валюта', on_delete=models.PROTECT)
+    currency = models.ForeignKey('market.Currency', verbose_name='Валюта', on_delete=models.PROTECT)
 
 
 class PayInOperation(Operation):
@@ -81,11 +79,8 @@ class PayOutOperation(Operation):
 class PurchaseAndSaleOperation(Operation, InstrumentMixin, DealMixin):
     """ Первичные операции - покупка/продажа """
     quantity = models.PositiveIntegerField(verbose_name='Количество', default=0)
-    commission = models.CharField(verbose_name='Комиссия', max_digits=16, decimal_places=4, default=0)
+    commission = models.DecimalField(verbose_name='Комиссия', max_digits=16, decimal_places=4, default=0)
     _id = models.CharField(verbose_name='ID', max_length=32)
-
-    def __str__(self):
-        return f'{self.friendly_type_format} ({self.investment_account} - {self.date})'
 
 
 class PurchaseOperation(PurchaseAndSaleOperation):
