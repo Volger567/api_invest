@@ -61,25 +61,31 @@ class Stock(InstrumentType):
 
 
 class DealQuerySet(models.QuerySet):
-    _sell_filter = Q(instance_of=SaleOperation)
-    _buy_filter = Q(instance_of=PurchaseOperation)
+    _sale_filter = Q(instance_of=SaleOperation)
+    _purchase_filter = Q(instance_of=PurchaseOperation)
 
-    def _with_buys_sells_annotations(self):
+    def _with_quantity_annotation_by_operation_type(self):
         return self.annotate(
-            sells=Coalesce(Sum('operations__quantity', filter=self._sell_filter), 0),
-            buys=Coalesce(Sum('operations__quantity', filter=self._buy_filter), 0)
+            sold_quantity=Coalesce(Sum('operations__quantity', filter=self._sale_filter), 0),
+            bought_quantity=Coalesce(Sum('operations__quantity', filter=self._purchase_filter), 0)
         )
 
     def opened(self):
-        return self._with_buys_sells_annotations().filter(~Q(sells=F('buys')) | Q(buys=0) | Q(sells=0))
+        return (
+            self._with_quantity_annotation_by_operation_type()
+            .filter(~Q(sold_quantity=F('bought_quantity')) | Q(bought_quantity=0) | Q(sold_quantity=0))
+        )
 
     def closed(self):
-        return self._with_buys_sells_annotations().filter(Q(sells=F('buys')) & ~Q(buys=0) & ~Q(sells=0))
+        return (
+            self._with_quantity_annotation_by_operation_type()
+            .filter(Q(sold_quantity=F('bought_quantity')) & ~Q(bought_quantity=0) & ~Q(sold_quantity=0))
+        )
 
     def with_closed_annotations(self):
-        return self._with_buys_sells_annotations().annotate(
+        return self._with_quantity_annotation_by_operation_type().annotate(
             is_closed=Case(
-                When(Q(sells=F('buys')) & ~Q(buys=0) & ~Q(sells=0), then=True),
+                When(Q(sold_quantity=F('bought_quantity')) & ~Q(buys=0) & ~Q(sells=0), then=True),
                 default=False, output_field=models.BooleanField()
             )
         )
@@ -110,14 +116,11 @@ class Deal(models.Model):
 
     objects = DealManager()
 
-    figi = models.ForeignKey('Stock', verbose_name='Ценная бумага', on_delete=models.PROTECT)
+    instrument = models.ForeignKey(InstrumentType, verbose_name='Ценная бумага', on_delete=models.PROTECT)
     investment_account = models.ForeignKey(
         'users.InvestmentAccount', verbose_name='Инвестиционный счет', on_delete=models.CASCADE,
         related_name='deals'
     )
-
-    def __str__(self):
-        return str(self.figi)
 
     def recalculation_income(self):
         """ Перерасчет дохода со сделки для каждого участника """

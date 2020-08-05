@@ -1,7 +1,8 @@
 from django.contrib import admin
 from django.db.models import Count
 
-from market.models import Currency, Operation, Transaction, Deal, Stock
+from operations.models import Operation, Transaction
+from market.models import Currency, Deal, Stock
 
 
 class CurrencyAdmin(admin.ModelAdmin):

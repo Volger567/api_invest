@@ -5,7 +5,7 @@ from django.db.models import Sum
 from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
 
-from market.models import Share
+from operations.models import Share
 from tinkoff_api import TinkoffProfile
 from tinkoff_api.exceptions import InvalidTokenError
 from users.models import InvestmentAccount, Investor, CoOwner

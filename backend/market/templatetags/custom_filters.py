@@ -1,7 +1,7 @@
 from django import template
 from django.db.models import Sum
 
-from market.models import Operation
+from operations.models import Operation
 
 register = template.Library()
 

@@ -1,24 +1,22 @@
 import datetime
 import logging
 import os
-from typing import List, Dict, Any
 
-import dateutil.parser
 import pytz
 from django.contrib.auth.models import AbstractUser, Group
 from django.db import models
-from django.db.models import Sum, Min, Case, When, Q, F, ExpressionWrapper, Avg
+from django.db.models import Sum, Case, When, Q, F, ExpressionWrapper, Avg
 from django.db.models.functions import Coalesce
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 
 from core import settings
-from market.models import Currency, Stock, Deal, DealIncome
+from market.models import Currency, Deal, DealIncome
 from operations.models import PayInOperation, PayOutOperation, ServiceCommissionOperation, PurchaseOperation, \
     SaleOperation
 from tinkoff_api import TinkoffProfile
 from tinkoff_api.exceptions import InvalidTokenError
-from users.services import update_operations_service
+from users.services.update_operations_service import OperationsHandler
 
 logger = logging.getLogger(__name__)
 
@@ -96,123 +94,13 @@ class InvestmentAccount(models.Model):
         # Получаем список операций в диапазоне
         # от даты последнего получения операций минус 12 часов до текущего момента
         logger.info('Обновление операций')
-        project_timezone = pytz.timezone(settings.TIME_ZONE)
         from_datetime = self.sync_at - datetime.timedelta(hours=12)
         to_datetime = datetime.datetime.now(tz=pytz.timezone(settings.TIME_ZONE))
-        operations = update_operations_service.get_operations_from_tinkoff_api(
-            self.token, from_datetime, to_datetime
-        )
-        logger.info('Операции получены')
-
-        # Тут будет храниться список всех операций
-        pre_bulk_create_operations: List[Dict[str, Any]] = []
-        # Словарь комиссий. Ключ - дата комиссии
-        commissions: Dict[datetime.datetime, Dict[str, Any]] = {}
-        # Список валют
-        currencies = Currency.objects.all()
-
-        for operation in operations:
-            logger.info(f'Обрабатываем операцию: {operation}')
-            operation_date = project_timezone.localize(
-                dateutil.parser.isoparse(operation['date']).replace(tzinfo=None)
-            )
-            # Будем брать только успешные операции
-            if operation['status'] != Operation.Statuses.DONE:
-                logger.info('Статус операции не равен DONE')
-                continue
-            # Если операция - комиссия брокера, добавляем в словарь комиссий
-            if operation['operationType'] == Operation.Types.BROKER_COMMISSION:
-                logger.info('Комиссия брокера, добавляем в словарь комиссий')
-                commissions[operation_date] = operation
-            # Во всех других случаях, добавляем в список операций
-            else:
-                # XXX:
-                if operation['operationType'] == Operation.Types.MARGIN_COMMISSION:
-                    logger.info('Комиссия за маржу')
-                    continue
-                pre_bulk_create_operations.append({
-                    # Инвестиционный счет, которому принадлежит операция
-                    'investment_account': self,
-                    # Тип операции, например продажа/покупка/налог
-                    'type': operation['operationType'],
-                    # Дата, когда произошла операция
-                    'date': operation_date,
-                    # Маржин колл
-                    'is_margin_call': operation['isMarginCall'],
-                    # Стоимость операции. Число отрицательное для убыточных операций
-                    'payment': operation['payment'],
-                    # В какой валюте была произведена операция
-                    'currency': currencies.get(iso_code__iexact=operation['currency']),
-                    # Статус операции, например Done/Decline
-                    'status': operation['status'],
-                    # ID операции. Уникален, если не равен -1
-                    'secondary_id': operation['id'],
-                    # Тип инструмента, например Stock
-                    'instrument_type': operation.get('instrumentType', ''),
-                    # Количество проданных, купленных ценных бумаг
-                    'quantity': operation.get('quantity', 0),
-                })
-                # Уникальный идентификатор ценной бумаги
-                try:
-                    figi = None if operation.get('figi') is None else Stock.objects.get(figi=operation['figi'])
-                except models.ObjectDoesNotExist:
-                    figi = None
-                pre_bulk_create_operations[-1]['figi'] = figi
-        # Список для bulk_create операции
-        bulk_create_operations = []
-        # Заносим в операции комиссию
-        for operation in pre_bulk_create_operations:
-            commission = commissions.get(operation['date'], 0)
-            if commission:
-                commission = commission['payment']
-            bulk_create_operations.append(
-                Operation(**operation, commission=commission)
-            )
-
-        # Создаем операции, ignore_conflict + constraints модели Operation
-        # позволяет избегать дублирования операций
-        Operation.objects.bulk_create(bulk_create_operations, ignore_conflicts=True)
-
-        # Создание сделок
-        operations = Operation.objects.filter(
-            investment_account=self,
-            date__range=(from_datetime, to_datetime),
-            deal__isnull=True,
-            type__in=(
-                Operation.Types.BUY, Operation.Types.BUY_CARD, Operation.Types.TAX_DIVIDEND,
-                Operation.Types.DIVIDEND, Operation.Types.SELL,
-            ),
-            figi__isnull=False
-        ).order_by('date')
-        bulk_create_shares = []
-        co_owners = self.co_owners.all().values_list('pk', 'default_share', named=True)
-        deals_for_recalculation_income = []
-        for operation in operations:
-            if operation.type in (Operation.Types.BUY, Operation.Types.BUY_CARD):
-                for co_owner in co_owners:
-                    bulk_create_shares.append(Share(
-                        operation=operation, co_owner_id=co_owner.pk, value=co_owner.default_share
-                    ))
-                deal, _ = Deal.objects.opened().get_or_create(
-                    investment_account=self,
-                    figi=operation.figi
-                )
-                deal.operations.add(operation)
-            elif operation.type == Operation.Types.SELL:
-                deal, _ = Deal.objects.opened().get_or_create(investment_account=self, figi=operation.figi)
-                deal.operations.add(operation)
-            else:
-                deal = (
-                    Deal.objects
-                    .filter(investment_account=self, figi=operation.figi)
-                    .annotate(opened_at=Min('operations__date'))
-                    .order_by('-opened_at')[0]
-                )
-                deal.operations.add(operation)
-            deals_for_recalculation_income.append(deal)
-        Share.objects.bulk_create(bulk_create_shares, ignore_conflicts=True)
-        for d in deals_for_recalculation_income:
-            d.recalculation_income()
+        operations_handler = OperationsHandler(self.token, from_datetime, to_datetime, self.id)
+        operations_handler.get_operations_from_tinkoff_api()
+        operations_handler.process_primary_operations()
+        operations_handler.process_secondary_operations()
+        operations_handler.update_deals()
 
     def update_currency_assets(self):
         """ Обновить валютные активы в портфеле"""
@@ -332,8 +220,7 @@ def investment_account_post_save(**kwargs):
         # Складываются все пополнения на счет, из них вычитаются выводы со счета и комиссия сервиса
         creator_capital = (
             instance.operations
-            .filter(type__in=(
-                Operation.Types.PAY_IN, Operation.Types.PAY_OUT, Operation.Types.SERVICE_COMMISSION))
+            .instance_of(PayInOperation, PayOutOperation, ServiceCommissionOperation)
             .aggregate(s=Coalesce(Sum('payment'), 0))['s']
         )
         co_owner.capital = creator_capital

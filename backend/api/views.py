@@ -13,7 +13,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.viewsets import ModelViewSet
 
-from market.models import Share, Operation
+from operations.models import Share, Operation
 from users.models import InvestmentAccount, Investor, CoOwner
 from .exceptions import TotalCapitalGrowThanMaxCapital, TotalDefaultShareGrowThan100
 from .permissions import RequestUserPermissions

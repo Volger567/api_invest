@@ -7,11 +7,13 @@ import datetime as dt
 import logging
 
 import dateutil.parser
+from django.db.models import Min
 
-from market.models import Currency, InstrumentType, Stock
+from market.models import Currency, InstrumentType, Stock, Deal
 from operations.models import Operation, PayInOperation, PayOutOperation, PurchaseOperation, SaleOperation, \
-    DividendOperation, ServiceCommissionOperation, MarginCommissionOperation
+    DividendOperation, ServiceCommissionOperation, MarginCommissionOperation, Share
 from tinkoff_api import TinkoffProfile
+from users.models import InvestmentAccount
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +48,7 @@ class OperationsHandler:
         :param to_datetime: до какой даты получать операции
         :param investment_account_id: id ИС
         """
+        logger.info('Инициализация OperationsHandler')
         self._token = token
         self.tinkoff_profile = TinkoffProfile(token)
         self.tinkoff_profile.auth()
@@ -76,10 +79,12 @@ class OperationsHandler:
 
     def get_operations_from_tinkoff_api(self) -> None:
         """ Получение списка операций в заданном временном диапазоне """
+        logger.info(f'Получение операций от {self.from_datetime.isoformat()} до {self.to_datetime.isoformat()}')
         # Получаем список операций в диапазоне
         self.operations = self.tinkoff_profile.operations(
             self.from_datetime, self.to_datetime
         )['payload']['operations']
+        logger.info('Операции получены')
         self._is_processed_primary_operations = False
         self._is_processed_secondary_operations = False
 
@@ -90,8 +95,10 @@ class OperationsHandler:
             ссылаются на первичные, т.е пока первичных операций нет,
             вторичные не могут быть созданы.
         """
+        logger.info('Обработка первичных операций')
         # Если была пройдена обработка первичных или вторичных операций, выходим
         if self.is_processed_primary_operations or self.is_processed_secondary_operations:
+            logger.warning('Первичные операции уже обработаны')
             return
 
         # Словарь, который будет возвращен
@@ -99,8 +106,10 @@ class OperationsHandler:
         final_operations = collections.defaultdict(list)
 
         for operation in self.operations.copy():
+            logger.info(f'Операция: {operation}')
             # Будем записывать только завершенные операции
             if operation['status'] != Operation.Statuses.DONE:
+                logger.info('Статус != DONE, пропускаем')
                 self.operations.remove(operation)
                 continue
 
@@ -119,12 +128,15 @@ class OperationsHandler:
                     .instance_of(self.model_by_instrument_type[operation['instrumentType']])
                     .get(figi=operation['figi'])
                 )
+                logger.info(f'У операции указан инструмент ({base_operation_kwargs["instrument"]})')
             model = self.model_by_operation_type[operation_type]
+            logger.info(f'Модель операции: {model}')
 
             # Операции, которым достаточно значений из base_operation_kwargs
             if operation_type in (Operation.Types.PAY_IN, Operation.Types.PAY_OUT, Operation.Types.DIVIDEND,
                                   Operation.Types.SERVICE_COMMISSION, Operation.Types.MARGIN_COMMISSION,
                                   Operation.Types.TAX, Operation.Types.TAX_BACK):
+                logger.info('Добавляется экземпляр на основе только base_operation_kwargs')
                 final_operations[model].append(model(**base_operation_kwargs))
                 self.operations.remove(operation)
             # Операции покупки, покупки с карты и продажи, по сути, ничем не отличаются,
@@ -133,8 +145,10 @@ class OperationsHandler:
                 # Некоторые операции могут быть без комиссии (например в первый месяц торгов)
                 commission = operation.get('commission')
                 commission = commission['value'] if isinstance(commission, dict) else 0
+                logger.info(f'Комиссия: {commission}')
                 if base_operation_kwargs['payment'] == 0:
                     base_operation_kwargs['payment'] = sum(i['quantity'] * i['price'] for i in operation['trades'])
+                    logger.warning(f'Payment не указана, вычислили из trades: {base_operation_kwargs["payment"]}')
                 obj = model(
                     **base_operation_kwargs,
                     quantity=operation['quantity'],
@@ -143,6 +157,11 @@ class OperationsHandler:
                 )
                 final_operations[model].append(obj)
                 self.operations.remove(operation)
+            elif operation_type == Operation.Types.BROKER_COMMISSION:
+                logger.info('Комиссия брокера')
+                self.operations.remove(operation)
+            else:
+                logger.info('Операция не является первичной')
 
         for model, bulk_create in final_operations:
             model.objects.bulk_create(bulk_create, ignore_conflicts=True)
@@ -151,15 +170,17 @@ class OperationsHandler:
         self.processed_primary_operations = final_operations
         # Первичные операции обработаны
         self._is_processed_primary_operations = True
+        logger.info('Обработка первичных операций завершена')
 
     def process_secondary_operations(self) -> None:
         """ Обработка вторичных операций и запись вторичных операций.
             Вторичные операции - это те операции, для создания которых
             необходимо существование первичных операций
         """
-
+        logger.info('Обработка вторичных операций')
         # Если обработка вторичных операций уже была - выходим
         if self.is_processed_secondary_operations:
+            logger.warning('Вторичные операции уже обработаны')
             return
         # Если первичные операции еще не обработаны - ошибка
         if not self.is_processed_primary_operations:
@@ -167,15 +188,73 @@ class OperationsHandler:
 
         # TODO: добавление транзакций в операции
         for operation in self.operations.copy():
+            logger.info(f'Операция: {operation}')
             operation_type = operation['operationType']
             operation_date = self.timezone.localize(dateutil.parser.isoparse(operation['date']).replace(tzinfo=None))
 
             # Для налога на дивиденды находим последнюю ценную бумагу без налога по figi
             if operation_type == Operation.Types.TAX_DIVIDEND:
+                logger.info('Операция "Налог на дивиденды"')
                 (
                     DividendOperation.objects
                     .filter(instrument__figi=operation['figi'], date__lte=operation_date, tax_date__isnull=True)
                     .order_by('-date')[0].update(tax=operation['payment'], tax_date=operation_date)
                 )
                 self.operations.remove(operation)
+        if self.operations:
+            logger.warning(f'Оставшиеся операции после вторичной обработки: {self.operations}')
+        else:
+            logger.info('После вторичной обработки операций не осталось')
         self._is_processed_secondary_operations = True
+        logger.info(f'Обработка вторичных операций завершена')
+
+    def update_deals(self) -> None:
+        """ Обновление сделок """
+        logger.info('Обновление сделок')
+        operations = (
+            Operation.objects
+            .instance_of(PurchaseOperation, SaleOperation, DividendOperation)
+            .filter(deal__isnull=True, investment_account_id=self.investment_account_id)
+            .order_by('date')
+        )
+
+        # Сделки, у которых надо пересчитать доход
+        recalculation_income_deals = set()
+        # Список всех совладельцев счета
+        co_owners = (
+            InvestmentAccount(id=self.investment_account_id).co_owners.all()
+            .values_list('pk', 'default_share', named=True)
+        )
+        logger.info(f'Список совладельцев: {co_owners}')
+        bulk_create_share = []
+        for operation in operations:
+            logger.info(f'Операция: {operation}')
+            if isinstance(operation, (PurchaseOperation, SaleOperation)):
+                for co_owner in co_owners:
+                    logger.info(f'Добавление доли операции для {co_owner}')
+                    bulk_create_share.append(
+                        Share(operation=operation, co_owner=co_owner, value=co_owner.default_share)
+                    )
+                deal, created = (
+                    Deal.objects.opened()
+                    .get_or_create(instrument=operation.instrument, investment_account_id=self.investment_account_id)
+                )
+                if created:
+                    logger.info('Сделка создана')
+                else:
+                    logger.info('Сделка существовала')
+                deal.operations.add(operation)
+                recalculation_income_deals.add(deal)
+            elif isinstance(operation, DividendOperation):
+                logger.info('Дивиденды')
+                (
+                    Deal.objects
+                    .filter(instrument=operation.instrument, investment_account_id=self.investment_account_id)
+                    .annotate(opened_date=Min('operations__date'))
+                    .filter(opened_date__lte=operation.date).last('opened_date').operations.add(operation)
+                )
+        Share.objects.bulk_create(bulk_create_share, ignore_conflicts=True)
+        for deal in recalculation_income_deals:
+            logger.info(f'Пересчет прибыли у {deal}')
+            deal.recalculation_income()
+        logger.info('Обновление сделок завершено')

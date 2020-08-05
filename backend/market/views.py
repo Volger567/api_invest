@@ -7,7 +7,8 @@ from django.db.models import Max, Sum, Min, F, Subquery, OuterRef
 from django.utils import timezone
 from django.views.generic import TemplateView, ListView
 
-from market.models import Operation, Stock, Deal
+from market.models import Stock, Deal
+from operations.models import Operation
 from tinkoff_api import TinkoffProfile
 
 

@@ -2,7 +2,7 @@ from decimal import Decimal
 from typing import Union, Dict, NoReturn
 
 # Как правило, это либо username, либо id, либо CoOwner
-from market.models import Operation
+from operations.models import Operation
 
 T_INVESTOR = Union[str, int, 'users.CoOwner']
 
