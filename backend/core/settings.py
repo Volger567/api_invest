@@ -45,9 +45,8 @@ INSTALLED_APPS = [
     'crispy_forms',
     'django_extensions',
     'rest_framework',
-    'corsheaders',
+    # 'corsheaders',
     'django_filters',
-    'polymorphic',
 
     # local
     'users.apps.UsersConfig',
@@ -56,8 +55,8 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
-    'corsheaders.middleware.CorsMiddleware',
-    'django.middleware.common.CommonMiddleware',
+    # 'corsheaders.middleware.CorsMiddleware',
+    # 'django.middleware.common.CommonMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -68,9 +67,9 @@ MIDDLEWARE = [
 ]
 
 # TODO:
-CORS_ORIGIN_WHITELIST = (
-    'localhost'
-)
+# CORS_ORIGIN_WHITELIST = (
+#     'localhost'
+# )
 
 ROOT_URLCONF = 'core.urls'
 

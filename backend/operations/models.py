@@ -1,14 +1,13 @@
 from django.core.validators import MaxValueValidator
 from django.db import models
-from polymorphic.models import PolymorphicModel
+from model_utils.managers import InheritanceManager
 
 
 class DealMixin(models.Model):
     class Meta:
         abstract = True
 
-    deal = models.ForeignKey('market.Deal', verbose_name='Сделка', on_delete=models.PROTECT,
-                             null=True, related_name='operations')
+    deal = models.ForeignKey('market.Deal', verbose_name='Сделка', on_delete=models.PROTECT, null=True)
 
 
 class InstrumentMixin(models.Model):
@@ -18,12 +17,7 @@ class InstrumentMixin(models.Model):
     instrument = models.ForeignKey('market.InstrumentType', verbose_name='Ценная бумага', on_delete=models.PROTECT)
 
 
-class PositivePaymentMixin(models.Model):
-    class Meta:
-        abstract = True
-
-
-class Operation(PolymorphicModel):
+class Operation(models.Model):
     """ Базовая модель операции, все виды операций наследуются от нее """
     class Meta:
         verbose_name = 'Операция'
@@ -53,46 +47,49 @@ class Operation(PolymorphicModel):
         TAX_DIVIDEND = 'TaxDividend', 'Налог на дивиденды'
         UNKNOWN = 'Unknown', 'Неизвестен'
 
+    objects = InheritanceManager()
     investment_account = models.ForeignKey(
         'users.InvestmentAccount', verbose_name='Инвестиционный счет', on_delete=models.CASCADE,
         related_name='operations'
     )
-    type = models.CharField(verbose_name='Тип', max_length=30, choices=Types.choices, default=Types.UNKNOWN)
+    # type = models.CharField(verbose_name='Тип', max_length=30, choices=Types.choices, default=Types.UNKNOWN)
     date = models.DateTimeField(verbose_name='Дата')
     is_margin_call = models.BooleanField(default=False)
     payment = models.DecimalField(verbose_name='Оплата', max_digits=20, decimal_places=4)
-    currency = models.ForeignKey('market.Currency', verbose_name='Валюта', on_delete=models.PROTECT)
+    currency = models.ForeignKey('market.CurrencyInstrument', verbose_name='Валюта', on_delete=models.PROTECT)
 
 
-class PayInOperation(Operation):
+class PayOperation(Operation):
     class Meta:
-        verbose_name = 'Пополнение средств'
-        verbose_name_plural = 'Пополнения средств'
+        verbose_name = 'Пополнение/Вывод средств'
+        verbose_name_plural = 'Пополнения/Выводы средств'
+
+    class Types(models.TextChoices):
+        PAY_IN = Operation.Types.PAY_IN
+        PAY_OUT = Operation.Types.PAY_OUT
+
+    type = models.CharField('Тип операции', choices=Types.choices, max_length=30)
+
+    def __str__(self):
+        return f'{self.type}, {self.investment_account}: {self.payment}'
 
 
-class PayOutOperation(Operation):
+class PrimaryOperation(Operation, InstrumentMixin, DealMixin):
     class Meta:
-        verbose_name = 'Вывод средств'
-        verbose_name_plural = 'Выводы средств'
+        verbose_name = 'Покупка/Продажа'
+        verbose_name_plural = 'Покупки/Продажа'
 
+    class Types(models.TextChoices):
+        BUY = Operation.Types.BUY
+        SELL = Operation.Types.SELL
 
-class PurchaseAndSaleOperation(Operation, InstrumentMixin, DealMixin):
-    """ Первичные операции - покупка/продажа """
+    type = models.CharField('Тип операции', choices=Types.choices, max_length=30)
     quantity = models.PositiveIntegerField(verbose_name='Количество', default=0)
     commission = models.DecimalField(verbose_name='Комиссия', max_digits=16, decimal_places=4, default=0)
     _id = models.CharField(verbose_name='ID', max_length=32)
 
-
-class PurchaseOperation(PurchaseAndSaleOperation):
-    class Meta:
-        verbose_name = 'Покупка'
-        verbose_name_plural = 'Покупки'
-
-
-class SaleOperation(PurchaseAndSaleOperation):
-    class Meta:
-        verbose_name = 'Продажа'
-        verbose_name_plural = 'Продажи'
+    def __str__(self):
+        return f'{self.type}, {self.investment_account}: {self.date}'
 
 
 class Transaction(models.Model):
@@ -104,7 +101,7 @@ class Transaction(models.Model):
         verbose_name_plural = 'Транзакции'
 
     _id = models.CharField(verbose_name='ID', max_length=32, unique=True)
-    operation = models.ForeignKey(PurchaseAndSaleOperation, verbose_name='Операция', on_delete=models.CASCADE)
+    operation = models.ForeignKey(Operation, verbose_name='Операция', on_delete=models.CASCADE)
     date = models.DateTimeField(verbose_name='Дата')
     quantity = models.PositiveIntegerField(verbose_name='Количество шт.')
     price = models.DecimalField(verbose_name='Цена/шт.', max_digits=20, decimal_places=4)
@@ -127,17 +124,11 @@ class CommissionOperation(Operation):
         verbose_name = 'Комиссия'
         verbose_name_plural = 'Комиссии'
 
+    class Types(models.TextChoices):
+        SERVICE_COMMISSION = Operation.Types.SERVICE_COMMISSION
+        MARGIN_COMMISSION = Operation.Types.MARGIN_COMMISSION
 
-class ServiceCommissionOperation(CommissionOperation):
-    class Meta:
-        verbose_name = 'Сервисная комиссия'
-        verbose_name_plural = 'Сервисные комиссии'
-
-
-class MarginCommissionOperation(CommissionOperation):
-    class Meta:
-        verbose_name = 'Комиссия за маржинальную торговлю'
-        verbose_name_plural = 'Комиссии за маржинальную торговлю'
+    type = models.CharField('Тип операции', choices=Types.choices, max_length=30)
 
 
 class TaxOperation(Operation):
@@ -162,7 +153,7 @@ class Share(models.Model):
         ]
         ordering = ['pk']
 
-    operation = models.ForeignKey(PurchaseAndSaleOperation, verbose_name='Операция',
+    operation = models.ForeignKey(PrimaryOperation, verbose_name='Операция',
                                   on_delete=models.CASCADE, related_name='shares')
     co_owner = models.ForeignKey('users.CoOwner', verbose_name='Совладелец',
                                  on_delete=models.CASCADE, related_name='shares')

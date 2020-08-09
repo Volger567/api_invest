@@ -1,5 +1,4 @@
 import logging
-import time
 
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import ObjectDoesNotExist
@@ -7,10 +6,9 @@ from django.db.models import Max, Sum, Min, F, Subquery, OuterRef
 from django.utils import timezone
 from django.views.generic import TemplateView, ListView
 
-from market.models import Stock, Deal
+from market.models import StockInstrument, Deal
 from operations.models import Operation
 from tinkoff_api import TinkoffProfile
-
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +36,7 @@ class OperationsView(LoginRequiredMixin, UpdateInvestmentAccount, ListView):
     def get_queryset(self):
         figi = self.request.GET.get('figi')
         try:
-            figi_object = Stock.objects.get(figi=figi)
+            figi_object = StockInstrument.objects.get(figi=figi)
         except ObjectDoesNotExist:
             queryset = Operation.objects.filter(
                 investment_account=self.investment_account,
@@ -64,7 +62,7 @@ class DealsView(LoginRequiredMixin, UpdateInvestmentAccount, TemplateView):
         # TODO: дату нормально выводить
         figi = self.request.GET.get('figi')
         try:
-            figi_object = Stock.objects.get(figi=figi)
+            figi_object = StockInstrument.objects.get(figi=figi)
         except ObjectDoesNotExist:
             queryset = Deal.objects.filter(investment_account=self.investment_account)
         else:

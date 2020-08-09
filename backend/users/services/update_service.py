@@ -1,63 +1,71 @@
-""" Модуль для работы с операциями
-    Получение их через Tinkoff API
+""" Модуль для обновления операций, сделок, валютных активов
+    Получение через Tinkoff API
     Запись в ИС
 """
 import collections
 import datetime as dt
 import logging
+from typing import Optional
 
 import dateutil.parser
+from django.apps import apps
 from django.db.models import Min
 
-from market.models import Currency, InstrumentType, Stock, Deal
-from operations.models import Operation, PayInOperation, PayOutOperation, PurchaseOperation, SaleOperation, \
-    DividendOperation, ServiceCommissionOperation, MarginCommissionOperation, Share
+from market.models import CurrencyInstrument, InstrumentType, StockInstrument, Deal
+from operations.models import Operation, PrimaryOperation, DividendOperation, PayOperation, CommissionOperation, Share
 from tinkoff_api import TinkoffProfile
-from users.models import InvestmentAccount
 
 logger = logging.getLogger(__name__)
 
 
-class OperationsHandler:
-    """ Получение операций от Tinkoff API,
-        обработка их и добавление в базу данных
+class Updater:
+    """ Получение валютных активов.
+        Получение операций от Tinkoff API,
+        обработка их и добавление в базу данных,
+        Создание и дополнение сделок на основе полученных операций
     """
 
     # Получение модели операции по типу операции (в строковом эквиваленте)
     model_by_operation_type = {
-        Operation.Types.SELL: SaleOperation,
-        Operation.Types.BUY: PurchaseOperation,
-        Operation.Types.BUY_CARD: PurchaseOperation,
+        Operation.Types.SELL: PrimaryOperation,
+        Operation.Types.BUY: PrimaryOperation,
+        Operation.Types.BUY_CARD: PrimaryOperation,
         Operation.Types.DIVIDEND: DividendOperation,
-        Operation.Types.PAY_IN: PayInOperation,
-        Operation.Types.PAY_OUT: PayOutOperation,
-        Operation.Types.SERVICE_COMMISSION: ServiceCommissionOperation,
-        Operation.Types.MARGIN_COMMISSION: MarginCommissionOperation
+        Operation.Types.PAY_IN: PayOperation,
+        Operation.Types.PAY_OUT: PayOperation,
+        Operation.Types.SERVICE_COMMISSION: CommissionOperation,
+        Operation.Types.MARGIN_COMMISSION: CommissionOperation
     }
 
     # Получение типа инструмента по строчному эквиваленту
     model_by_instrument_type = {
-        InstrumentType.Types.STOCK: Stock,
-        InstrumentType.Types.CURRENCY: Currency
+        InstrumentType.Types.STOCK: StockInstrument,
+        InstrumentType.Types.CURRENCY: CurrencyInstrument
     }
 
-    def __init__(self, token: str, from_datetime: dt.datetime, to_datetime: dt.datetime, investment_account_id: int):
+    def __init__(self, from_datetime: dt.datetime, to_datetime: dt.datetime, investment_account_pk: int,
+                 token: Optional[str] = None, tinkoff_profile: Optional[TinkoffProfile] = None):
         """ Инициализатор
-        :param token: токен от Tinkoff API
         :param from_datetime: с какой даты получать операции
         :param to_datetime: до какой даты получать операции
-        :param investment_account_id: id ИС
+        :param investment_account_pk: id ИС
+        :param token: токен от Tinkoff API, если None, будет использоваться tinkoff_profile
+        :param tinkoff_profile: профиль Tinkoff API, если None, будет использоваться token
         """
         logger.info('Инициализация OperationsHandler')
-        self._token = token
-        self.tinkoff_profile = TinkoffProfile(token)
+        if token is None and tinkoff_profile is None:
+            raise ValueError('Надо передать token или tinkoff_profile')
+        if token:
+            self.tinkoff_profile = TinkoffProfile(token)
+        else:
+            self.tinkoff_profile = tinkoff_profile
         self.tinkoff_profile.auth()
         # Проверяет корректность переданных дат, в том числе наличие у них tzinfo
         self.tinkoff_profile.check_date_range(from_datetime, to_datetime)
         self.from_datetime = from_datetime
         self.to_datetime = to_datetime
         self.timezone = from_datetime.tzinfo
-        self.investment_account_id = investment_account_id
+        self.investment_account_pk = investment_account_pk
         self.operations = []
         # Флаг, становится True когда проходит обработка первичных операций
         self._is_processed_primary_operations = False
@@ -66,7 +74,10 @@ class OperationsHandler:
         # Операции, после первичной обработки
         self.processed_primary_operations = {}
         # Все валюты и торговые инструменты
-        self.currencies = Currency.objects.all()
+        self.currencies = {
+            iso_code: pk
+            for iso_code, pk in CurrencyInstrument.objects.values_list('pk', 'iso_code')
+        }
         self.instruments = InstrumentType.objects.all()
 
     @property
@@ -96,6 +107,11 @@ class OperationsHandler:
             вторичные не могут быть созданы.
         """
         logger.info('Обработка первичных операций')
+        specify_type_for = (
+            Operation.Types.PAY_IN, Operation.Types.PAY_OUT,
+            Operation.Types.SERVICE_COMMISSION, Operation.Types.MARGIN_COMMISSION,
+            Operation.Types.BUY, Operation.Types.BUY_CARD, Operation.Types.SELL
+        )
         # Если была пройдена обработка первичных или вторичных операций, выходим
         if self.is_processed_primary_operations or self.is_processed_secondary_operations:
             logger.warning('Первичные операции уже обработаны')
@@ -116,17 +132,17 @@ class OperationsHandler:
             operation_type = operation['operationType']
             # У каждой операции есть эти свойства, поэтому вынесем их
             base_operation_kwargs = {
-                'investment_account_id': self.investment_account_id,
+                'investment_account_pk': self.investment_account_pk,
                 'date': self.timezone.localize(dateutil.parser.isoparse(operation['date']).replace(tzinfo=None)),
                 'is_margin_call': operation['isMarginCall'],
                 'payment': operation['payment'],
-                'currency': self.currencies.get(iso_code=operation['currency'])
+                'currency_id': self.currencies.get(operation['currency'])
             }
+            if operation_type in specify_type_for:
+                base_operation_kwargs['type'] = operation_type
             if operation.get('instrumentType') is not None:
                 base_operation_kwargs['instrument'] = (
-                    self.instruments
-                    .instance_of(self.model_by_instrument_type[operation['instrumentType']])
-                    .get(figi=operation['figi'])
+                    self.model_by_instrument_type[operation['instrumentType']].objects.get(figi=operation['figi'])
                 )
                 logger.info(f'У операции указан инструмент ({base_operation_kwargs["instrument"]})')
             model = self.model_by_operation_type[operation_type]
@@ -208,13 +224,20 @@ class OperationsHandler:
         self._is_processed_secondary_operations = True
         logger.info(f'Обработка вторичных операций завершена')
 
+    def update_operations(self) -> None:
+        """ Обновление операций """
+        self.get_operations_from_tinkoff_api()
+        self.process_primary_operations()
+        self.process_secondary_operations()
+
     def update_deals(self) -> None:
         """ Обновление сделок """
+        investment_account_model = apps.get_model('users', 'InvestmentAccount')
         logger.info('Обновление сделок')
         operations = (
             Operation.objects
-            .instance_of(PurchaseOperation, SaleOperation, DividendOperation)
-            .filter(deal__isnull=True, investment_account_id=self.investment_account_id)
+            .instance_of(PrimaryOperation, DividendOperation)
+            .filter(deal__isnull=True, investment_account_pk=self.investment_account_pk)
             .order_by('date')
         )
 
@@ -222,14 +245,14 @@ class OperationsHandler:
         recalculation_income_deals = set()
         # Список всех совладельцев счета
         co_owners = (
-            InvestmentAccount(id=self.investment_account_id).co_owners.all()
+            investment_account_model(pk=self.investment_account_pk).co_owners.all()
             .values_list('pk', 'default_share', named=True)
         )
         logger.info(f'Список совладельцев: {co_owners}')
         bulk_create_share = []
         for operation in operations:
             logger.info(f'Операция: {operation}')
-            if isinstance(operation, (PurchaseOperation, SaleOperation)):
+            if isinstance(operation, PrimaryOperation):
                 for co_owner in co_owners:
                     logger.info(f'Добавление доли операции для {co_owner}')
                     bulk_create_share.append(
@@ -237,7 +260,7 @@ class OperationsHandler:
                     )
                 deal, created = (
                     Deal.objects.opened()
-                    .get_or_create(instrument=operation.instrument, investment_account_id=self.investment_account_id)
+                    .get_or_create(instrument=operation.instrument, investment_account_pk=self.investment_account_pk)
                 )
                 if created:
                     logger.info('Сделка создана')
@@ -249,7 +272,7 @@ class OperationsHandler:
                 logger.info('Дивиденды')
                 (
                     Deal.objects
-                    .filter(instrument=operation.instrument, investment_account_id=self.investment_account_id)
+                    .filter(instrument=operation.instrument, investment_account_pk=self.investment_account_pk)
                     .annotate(opened_date=Min('operations__date'))
                     .filter(opened_date__lte=operation.date).last('opened_date').operations.add(operation)
                 )
@@ -258,3 +281,27 @@ class OperationsHandler:
             logger.info(f'Пересчет прибыли у {deal}')
             deal.recalculation_income()
         logger.info('Обновление сделок завершено')
+
+    def update_currency_assets(self):
+        """ Обновление валютных активов портфеля """
+        logger.info('Обновление валютных активов')
+        investment_account_model = apps.get_model('users', 'InvestmentAccount')
+        currency_asset_model = apps.get_model('users', 'CurrencyAsset')
+        currency_actives = self.tinkoff_profile.portfolio_currencies()['payload']['currencies']
+        (
+            investment_account_model.objects
+            .get(pk=self.investment_account_pk).currency_assets
+            .exclude(currency__iso_code__in=[c['currency'] for c in currency_actives]).delete()
+        )
+        for currency in currency_actives:
+            obj, created = currency_asset_model.objects.get_or_create(
+                investment_account=self,
+                currency=CurrencyInstrument.objects.get(iso_code__iexact=currency['currency']),
+                defaults={
+                    'value': currency['balance']
+                }
+            )
+            if not created:
+                obj.value = currency['balance']
+                obj.save(update_fields=['value'])
+        logger.info('Обновление валютных активов завершено')

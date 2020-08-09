@@ -4,12 +4,11 @@ from decimal import Decimal
 from django.db import models
 from django.db.models import Sum, F, Q, Case, When, ExpressionWrapper, Avg
 from django.db.models.functions import Coalesce
-from polymorphic.models import PolymorphicModel
 
 from operations.models import SaleOperation, PurchaseOperation, DividendOperation
 
 
-class InstrumentType(PolymorphicModel):
+class InstrumentType(models.Model):
     class Meta:
         verbose_name = 'Торговый инструмент'
         verbose_name_plural = 'Торговые инструменты'
@@ -19,8 +18,10 @@ class InstrumentType(PolymorphicModel):
         CURRENCY = 'Currency', 'Валюта'
         # TODO: Еще Bond, Etf
 
+    name = models.CharField(verbose_name='Название', max_length=200)
 
-class Currency(InstrumentType):
+
+class CurrencyInstrument(InstrumentType):
     """ Валюты, в которых могут проводиться операции """
     class Meta:
         verbose_name = 'Валюта'
@@ -30,7 +31,6 @@ class Currency(InstrumentType):
     # iso_code не primary_key потому что у валют он может меняться
     iso_code = models.CharField(verbose_name='Код', max_length=3, unique=True)
     abbreviation = models.CharField(verbose_name='Знак', max_length=16)
-    name = models.CharField(verbose_name='Название', max_length=120)
 
     def save(self, *args, **kwargs):
         iso_code = self.iso_code
@@ -42,7 +42,7 @@ class Currency(InstrumentType):
         return self.name
 
 
-class Stock(InstrumentType):
+class StockInstrument(InstrumentType):
     """ Ценная акция на рынке """
     class Meta:
         verbose_name = 'Акция'
@@ -53,8 +53,7 @@ class Stock(InstrumentType):
     isin = models.CharField(verbose_name='ISIN', max_length=32)
     min_price_increment = models.DecimalField(verbose_name='Шаг цены', max_digits=10, decimal_places=4, default=0)
     lot = models.PositiveIntegerField(verbose_name='шт/лот')
-    currency = models.ForeignKey(Currency, verbose_name='Валюта', on_delete=models.CASCADE)
-    name = models.CharField(verbose_name='Название', max_length=250)
+    currency = models.ForeignKey(CurrencyInstrument, verbose_name='Валюта', on_delete=models.CASCADE)
 
     def __str__(self):
         return self.name
@@ -124,6 +123,7 @@ class Deal(models.Model):
 
     def recalculation_income(self):
         """ Перерасчет дохода со сделки для каждого участника """
+        # XXX
         operations = (
             self.operations
             .prefetch_related('shares')

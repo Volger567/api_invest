@@ -4,7 +4,7 @@ import os
 from django.contrib.auth import get_user_model
 from django.core.management import BaseCommand
 
-from market.models import Currency, Stock
+from market.models import CurrencyInstrument, StockInstrument, InstrumentType
 from tinkoff_api import TinkoffProfile
 
 logger = logging.getLogger(__name__)
@@ -25,7 +25,7 @@ class Command(BaseCommand):
         currencies = (
             ('RUB', chr(8381), 'Российский рубль', ''),
             ('USD', chr(36), 'Американский доллар', 'BBG0013HGFT4'),
-            ('EUR', chr(8364), 'Евро', 'BBG0013HJJ31', ''),
+            ('EUR', chr(8364), 'Евро', 'BBG0013HJJ31'),
             ('GBP', chr(163), 'Фунт стерлингов', ''),
             ('HKD', 'HK'+chr(36), 'Гонконгский доллар', ''),
             ('CHF', chr(8355), 'Швейцарский франк', ''),
@@ -34,11 +34,11 @@ class Command(BaseCommand):
             ('TRY', chr(8378), 'Турецкая лира', '')
         )
         currencies = [
-            Currency(iso_code=iso, abbreviation=abbr, name=name, figi=figi)
+            CurrencyInstrument(iso_code=iso, abbreviation=abbr, name=name, figi=figi)
             for iso, abbr, name, figi in currencies
         ]
-        Currency.objects.bulk_create(currencies, ignore_conflicts=True)
-        Currency.objects.bulk_update(currencies)
+        logger.info(currencies)
+        InstrumentType.objects.bulk_create(currencies)
         logger.info('Валюты созданы')
 
         logger.info('Создаем супер-пользователя')
@@ -60,11 +60,11 @@ class Command(BaseCommand):
         token = os.getenv('tinkoff_api_production_token') or os.getenv('tinkoff_api_sandbox_token')
         with TinkoffProfile(token) as tp:
             stocks = tp.market_stocks()
-        db_currencies = Currency.objects.all()
+        db_currencies = CurrencyInstrument.objects.all()
         if options['with_update']:
             for stock in stocks['payload']['instruments']:
                 # TODO: оптимизировать
-                Stock.objects.update_or_create(
+                StockInstrument.objects.update_or_create(
                     figi=stock['figi'],
                     defaults={
                         'figi': stock['figi'],
@@ -77,13 +77,13 @@ class Command(BaseCommand):
                     }
                 )
         else:
-            figies = set(Stock.objects.all().values_list('figi', flat=True))
+            figies = set(StockInstrument.objects.all().values_list('figi', flat=True))
             new_figies = set(i['figi'] for i in stocks['payload']['instruments'])
             new_figies -= figies
             result = []
             for stock in stocks['payload']['instruments']:
                 if stock['figi'] in new_figies:
-                    result.append(Stock(**{
+                    result.append(StockInstrument(**{
                         'figi': stock['figi'],
                         'ticker': stock['ticker'],
                         'isin': stock['isin'],
@@ -92,4 +92,4 @@ class Command(BaseCommand):
                         'currency': db_currencies.get(iso_code__iexact=stock['currency']),
                         'name': stock['name']
                     }))
-            Stock.objects.bulk_create(result, ignore_conflicts=True)
+            InstrumentType.objects.bulk_create(result)

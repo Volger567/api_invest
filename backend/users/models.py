@@ -11,12 +11,11 @@ from django.db.models.signals import post_save
 from django.dispatch import receiver
 
 from core import settings
-from market.models import Currency, Deal, DealIncome
+from market.models import Deal, DealIncome
 from operations.models import PayInOperation, PayOutOperation, ServiceCommissionOperation, PurchaseOperation, \
     SaleOperation
-from tinkoff_api import TinkoffProfile
 from tinkoff_api.exceptions import InvalidTokenError
-from users.services.update_operations_service import OperationsHandler
+from users.services.update_service import Updater
 
 logger = logging.getLogger(__name__)
 
@@ -63,76 +62,54 @@ class InvestmentAccount(models.Model):
     @property
     def prop_total_income(self):
         """ Расчет дохода инвестиционного счета """
-        closed_deals_total_income = (
+        total_income_of_closed_deals = (
             self.deals.closed()
             .annotate(_income=Sum('operations__payment')+Sum('operations__commission'))
-            .aggregate(Sum('_income'))['_income__sum']
+            .aggregate(s=Sum('_income'))['s']
         )
 
         f_price = ExpressionWrapper(
             (F('operations__payment')+F('operations__commission'))/F('operations__quantity'),
             output_field=models.DecimalField()
         )
-        only_buy = Q(instance_of=PurchaseOperation)
-        only_sell = Q(instance_of=SaleOperation)
-        avg_sum = Avg(f_price, filter=only_buy) + Avg(f_price, filter=only_sell)
-        pieces_sold = Sum('operations__quantity', filter=only_sell)
-        opened_deals_total_income = (
+        q_purchase = Q(instance_of=PurchaseOperation)
+        q_sale = Q(instance_of=SaleOperation)
+        avg_sum = Avg(f_price, filter=q_purchase) + Avg(f_price, filter=q_sale)
+        pieces_sold = Sum('operations__quantity', filter=q_sale)
+        total_income_of_opened_deals = (
             Deal.objects.opened()
             .annotate(_income=Coalesce(ExpressionWrapper(avg_sum*pieces_sold, output_field=models.DecimalField()), 0))
-        ).aggregate(Sum('_income'))['_income__sum']
-        return closed_deals_total_income + opened_deals_total_income
+        ).aggregate(s=Sum('_income'))['s']
+        return total_income_of_closed_deals + total_income_of_opened_deals
 
     @property
     def prop_total_capital(self):
         """ Расчет общего капитала для всего ИС """
-        # XXX:
+        # XXX
         return 0
 
-    def update_operations(self):
-        """ Обновление списка операций и сделок """
-        # Получаем список операций в диапазоне
-        # от даты последнего получения операций минус 12 часов до текущего момента
-        logger.info('Обновление операций')
-        from_datetime = self.sync_at - datetime.timedelta(hours=12)
-        to_datetime = datetime.datetime.now(tz=pytz.timezone(settings.TIME_ZONE))
-        operations_handler = OperationsHandler(self.token, from_datetime, to_datetime, self.id)
-        operations_handler.get_operations_from_tinkoff_api()
-        operations_handler.process_primary_operations()
-        operations_handler.process_secondary_operations()
-        operations_handler.update_deals()
-
-    def update_currency_assets(self):
-        """ Обновить валютные активы в портфеле"""
-        with TinkoffProfile(self.token) as tp:
-            currency_actives = tp.portfolio_currencies()['payload']['currencies']
-        self.currency_assets.exclude(currency__iso_code__in=[c['currency'] for c in currency_actives]).delete()
-        for currency in currency_actives:
-            obj, created = CurrencyAsset.objects.get_or_create(
-                investment_account=self,
-                currency=Currency.objects.get(iso_code__iexact=currency['currency']),
-                defaults={
-                    'value': currency['balance']
-                }
-            )
-            if not created:
-                obj.value = currency['balance']
-                obj.save(update_fields=['value'])
-
-    def update_all(self, now):
+    def update_portfolio(self, now):
+        """ Обновление всего портфеля.
+            Включает в себя обновление операций, сделок, валютных активов
+        :param now: Текущий момент времени, до которого будут обновляться операции
+        """
         logger.info(f'Обновление портфеля "{self}"')
         update_frequency = datetime.timedelta(minutes=float(os.getenv('PROJECT_OPERATIONS_UPDATE_FREQUENCY', 1)))
         try:
             if now - self.sync_at > update_frequency:
-                self.update_currency_assets()
-                self.update_operations()
+                from_datetime = self.sync_at - datetime.timedelta(hours=12)
+                to_datetime = datetime.datetime.now(tz=pytz.timezone(settings.TIME_ZONE))
+                updater = Updater(from_datetime, to_datetime, self.pk, token=self.token)
+                updater.update_currency_assets()
+                updater.update_operations()
+                updater.update_deals()
                 self.sync_at = now
                 self.save()
                 logger.info('Обновление завершено')
             else:
-                logger.info('Раннее обновление')
+                logger.info('Портфель обновлялся недавно')
         except InvalidTokenError:
-            logger.info('Обновление не удалось, токен невалидный')
+            logger.warning('Обновление не удалось, токен невалидный')
 
     def __str__(self):
         return f'{self.name} ({self.creator})'
@@ -193,7 +170,7 @@ class CurrencyAsset(models.Model):
 
     investment_account = models.ForeignKey(
         InvestmentAccount, verbose_name='Инвестиционный счет', on_delete=models.CASCADE, related_name='currency_assets')
-    currency = models.ForeignKey(Currency, verbose_name='Валюта', on_delete=models.PROTECT)
+    currency = models.ForeignKey('market.CurrencyInstrument', verbose_name='Валюта', on_delete=models.PROTECT)
     value = models.DecimalField(verbose_name='Количество', max_digits=20, decimal_places=4, default=0)
 
 
