@@ -5,7 +5,7 @@ from django.db import models
 from django.db.models import Sum, F, Q, Case, When, ExpressionWrapper, Avg
 from django.db.models.functions import Coalesce
 
-from operations.models import SaleOperation, PurchaseOperation, DividendOperation
+from operations.models import PrimaryOperation, Operation
 
 
 class InstrumentType(models.Model):
@@ -19,15 +19,16 @@ class InstrumentType(models.Model):
         # TODO: Еще Bond, Etf
 
     name = models.CharField(verbose_name='Название', max_length=200)
+    figi = models.CharField('FIGI', max_length=32, unique=True)
+    ticker = models.CharField(verbose_name='Ticker', max_length=16, unique=True)
 
 
 class CurrencyInstrument(InstrumentType):
-    """ Валюты, в которых могут проводиться операции """
+    """ Валюты, которые можно купить на бирже """
     class Meta:
         verbose_name = 'Валюта'
         verbose_name_plural = 'Валюты'
 
-    figi = models.CharField('figi', max_length=32, default='')
     # iso_code не primary_key потому что у валют он может меняться
     iso_code = models.CharField(verbose_name='Код', max_length=3, unique=True)
     abbreviation = models.CharField(verbose_name='Знак', max_length=16)
@@ -47,21 +48,20 @@ class StockInstrument(InstrumentType):
     class Meta:
         verbose_name = 'Акция'
         verbose_name_plural = 'Акции'
+        constraints = models.UniqueConstraint
 
-    figi = models.CharField(verbose_name='FIGI', max_length=32, unique=True)
-    ticker = models.CharField(verbose_name='Ticker', max_length=16, unique=True)
     isin = models.CharField(verbose_name='ISIN', max_length=32)
     min_price_increment = models.DecimalField(verbose_name='Шаг цены', max_digits=10, decimal_places=4, default=0)
     lot = models.PositiveIntegerField(verbose_name='шт/лот')
-    currency = models.ForeignKey(CurrencyInstrument, verbose_name='Валюта', on_delete=models.CASCADE)
+    currency = models.ForeignKey('operations.Currency', verbose_name='Валюта', on_delete=models.CASCADE)
 
     def __str__(self):
         return self.name
 
 
 class DealQuerySet(models.QuerySet):
-    _sale_filter = Q(instance_of=SaleOperation)
-    _purchase_filter = Q(instance_of=PurchaseOperation)
+    _sale_filter = Q(instance_of=PrimaryOperation, type=Operation.Types.SELL)
+    _purchase_filter = Q(instance_of=PrimaryOperation, type__in=(Operation.Types.BUY, Operation.Types.BUY_CARD))
 
     def _with_quantity_annotation_by_operation_type(self):
         return self.annotate(
@@ -136,7 +136,7 @@ class Deal(models.Model):
         total_shares = collections.Counter()
         tmp_buy = (
             operations
-            .instance_of(PurchaseOperation)
+            .only_purchases()
             .aggregate(q=Sum('quantity'))
         )
         total_bought_quantity = tmp_buy['q']
@@ -144,18 +144,17 @@ class Deal(models.Model):
         total_paid = collections.Counter()
         tmp_sell = (
             operations
-            .instance_of(SaleOperation)
+            .only_sales()
             .aggregate(avg=Avg('price'), q=Sum('quantity'), commission=Sum('commission'))
         )
         average_sell_price = tmp_sell['avg']
         total_sold_quantity = tmp_sell['q']
         total_sold_commission = tmp_sell['commission']
         dividend_income = (
-            operations
-            .instance_of(DividendOperation)
+            self.dividends
             .aggregate(income=Coalesce(Sum('payment') + Sum('tax'), 0))['income']
         )
-        for operation in operations.instance_of(PurchaseOperation):
+        for operation in operations.only_purchases():
             for share in operation.shares.all():
                 total_shares[share.co_owner] += Decimal(share.value/operation.total_shares*operation.quantity)
                 total_paid[share.co_owner] += \

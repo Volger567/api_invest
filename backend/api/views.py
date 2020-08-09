@@ -1,7 +1,7 @@
 import decimal
 import logging
 import os
-from collections import Iterable
+from collections.abc import Iterable
 from typing import Dict
 
 from django.db import models
@@ -13,7 +13,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.viewsets import ModelViewSet
 
-from operations.models import Share, Operation
+from operations.models import Share, PrimaryOperation
 from users.models import InvestmentAccount, Investor, CoOwner
 from .exceptions import TotalCapitalGrowThanMaxCapital, TotalDefaultShareGrowThan100
 from .permissions import RequestUserPermissions
@@ -196,10 +196,7 @@ class CoOwnersUpdateView(APIView):
             Share.objects.filter(operation__investment_account=updated_investment_account).delete()
             co_owners = updated_investment_account.co_owners.values_list('pk', 'default_share', named=True)
             bulk_creates = []
-            operations = updated_investment_account.operations.filter(type__in=(
-                Operation.Types.BUY, Operation.Types.BUY_CARD, Operation.Types.TAX_DIVIDEND,
-                Operation.Types.DIVIDEND
-            ))
+            operations = updated_investment_account.operations.instance_of(PrimaryOperation)
             for operation in operations:
                 for co_owner in co_owners:
                     bulk_creates.append(Share(

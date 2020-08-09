@@ -6,14 +6,14 @@ from django.db.models import Max, Sum, Min, F, Subquery, OuterRef
 from django.utils import timezone
 from django.views.generic import TemplateView, ListView
 
-from market.models import StockInstrument, Deal
+from market.models import StockInstrument, Deal, InstrumentType
 from operations.models import Operation
 from tinkoff_api import TinkoffProfile
 
 logger = logging.getLogger(__name__)
 
 
-class UpdateInvestmentAccount:
+class UpdateInvestmentAccountMixin:
     def get(self, *args, **kwargs):
         self.investment_account = self.request.user.default_investment_account
         if self.investment_account:
@@ -28,7 +28,7 @@ class UpdateInvestmentAccount:
         return context
 
 
-class OperationsView(LoginRequiredMixin, UpdateInvestmentAccount, ListView):
+class OperationsView(LoginRequiredMixin, UpdateInvestmentAccountMixin, ListView):
     template_name = 'operations.html'
     context_object_name = 'operations'
     model = Operation
@@ -36,17 +36,18 @@ class OperationsView(LoginRequiredMixin, UpdateInvestmentAccount, ListView):
     def get_queryset(self):
         figi = self.request.GET.get('figi')
         try:
-            figi_object = StockInstrument.objects.get(figi=figi)
+            figi_object = InstrumentType.objects.get(figi=figi)
         except ObjectDoesNotExist:
             queryset = Operation.objects.filter(
                 investment_account=self.investment_account,
                 status=Operation.Statuses.DONE
-            )
+            ).select_related()
         else:
             queryset = Operation.objects.filter(
                 investment_account=self.investment_account,
                 status=Operation.Statuses.DONE, figi=figi_object
-            )
+            ).select_related()
+        # XXX
         return (
             queryset
             .annotate(lots=F('quantity')/F('figi__lot'))
@@ -55,7 +56,7 @@ class OperationsView(LoginRequiredMixin, UpdateInvestmentAccount, ListView):
         )
 
 
-class DealsView(LoginRequiredMixin, UpdateInvestmentAccount, TemplateView):
+class DealsView(LoginRequiredMixin, UpdateInvestmentAccountMixin, TemplateView):
     template_name = 'deals.html'
 
     def get_context_data(self, **kwargs):

@@ -5,6 +5,7 @@ from django.contrib.auth import get_user_model
 from django.core.management import BaseCommand
 
 from market.models import CurrencyInstrument, StockInstrument, InstrumentType
+from operations.models import Currency
 from tinkoff_api import TinkoffProfile
 
 logger = logging.getLogger(__name__)
@@ -23,22 +24,22 @@ class Command(BaseCommand):
         """ Создает дефолтные записи в моделях валюты и ценных бумаг """
         logger.info('Создаем валюты')
         currencies = (
-            ('RUB', chr(8381), 'Российский рубль', ''),
-            ('USD', chr(36), 'Американский доллар', 'BBG0013HGFT4'),
-            ('EUR', chr(8364), 'Евро', 'BBG0013HJJ31'),
-            ('GBP', chr(163), 'Фунт стерлингов', ''),
-            ('HKD', 'HK'+chr(36), 'Гонконгский доллар', ''),
-            ('CHF', chr(8355), 'Швейцарский франк', ''),
-            ('JPY', chr(165), 'Японская иена', ''),
-            ('CNY', chr(165),  'Китайский юань', ''),
-            ('TRY', chr(8378), 'Турецкая лира', '')
+            ('RUB', chr(8381), 'Российский рубль'),
+            ('USD', chr(36), 'Американский доллар'),
+            ('EUR', chr(8364), 'Евро'),
+            ('GBP', chr(163), 'Фунт стерлингов'),
+            ('HKD', 'HK'+chr(36), 'Гонконгский доллар'),
+            ('CHF', chr(8355), 'Швейцарский франк'),
+            ('JPY', chr(165), 'Японская иена'),
+            ('CNY', chr(165),  'Китайский юань'),
+            ('TRY', chr(8378), 'Турецкая лира')
         )
         currencies = [
-            CurrencyInstrument(iso_code=iso, abbreviation=abbr, name=name, figi=figi)
-            for iso, abbr, name, figi in currencies
+            Currency(iso_code=iso, abbreviation=abbr, name=name)
+            for iso, abbr, name in currencies
         ]
         logger.info(currencies)
-        InstrumentType.objects.bulk_create(currencies)
+        InstrumentType.objects.bulk_create(currencies, ignore_conflicts=True)
         logger.info('Валюты созданы')
 
         logger.info('Создаем супер-пользователя')
@@ -57,10 +58,10 @@ class Command(BaseCommand):
             superuser.save()
             logger.info(f'Супер-пользователь "{superuser.username}" создан')
 
+        logger.info('Получаем список ценных бумаг')
         token = os.getenv('tinkoff_api_production_token') or os.getenv('tinkoff_api_sandbox_token')
         with TinkoffProfile(token) as tp:
             stocks = tp.market_stocks()
-        db_currencies = CurrencyInstrument.objects.all()
         if options['with_update']:
             for stock in stocks['payload']['instruments']:
                 # TODO: оптимизировать
@@ -72,7 +73,7 @@ class Command(BaseCommand):
                         'isin': stock['isin'],
                         'min_price_increment': stock.get('minPriceIncrement'),
                         'lot': stock['lot'],
-                        'currency': db_currencies.get(iso_code__iexact=stock['currency']),
+                        'currency_id': stock['currency'],
                         'name': stock['name']
                     }
                 )
@@ -89,7 +90,7 @@ class Command(BaseCommand):
                         'isin': stock['isin'],
                         'min_price_increment': stock.get('minPriceIncrement', 0),
                         'lot': stock['lot'],
-                        'currency': db_currencies.get(iso_code__iexact=stock['currency']),
+                        'currency_id': stock['currency'],
                         'name': stock['name']
                     }))
             InstrumentType.objects.bulk_create(result)

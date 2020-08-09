@@ -1,13 +1,6 @@
 from django.core.validators import MaxValueValidator
 from django.db import models
-from model_utils.managers import InheritanceManager
-
-
-class DealMixin(models.Model):
-    class Meta:
-        abstract = True
-
-    deal = models.ForeignKey('market.Deal', verbose_name='Сделка', on_delete=models.PROTECT, null=True)
+from model_utils.managers import InheritanceManager, InheritanceQuerySet
 
 
 class InstrumentMixin(models.Model):
@@ -15,6 +8,35 @@ class InstrumentMixin(models.Model):
         abstract = True
 
     instrument = models.ForeignKey('market.InstrumentType', verbose_name='Ценная бумага', on_delete=models.PROTECT)
+
+
+class Currency(models.Model):
+    """ Валюты, в которых могут проводиться операции """
+    class Meta:
+        verbose_name = 'Валюта'
+        verbose_name_plural = 'Валюты'
+
+    iso_code = models.CharField(verbose_name='Код', max_length=3, unique=True, primary_key=True)
+    abbreviation = models.CharField(verbose_name='Символ', max_length=16)
+    name = models.CharField(verbose_name='Название', max_length=100, unique=True)
+
+
+class OperationQuerySet(InheritanceQuerySet):
+    def only_purchases(self):
+        return self.instance_of(PrimaryOperation).filter(type__in=(Operation.Types.BUY, Operation.Types.BUY_CARD))
+
+    def only_sales(self):
+        return self.instance_of(PrimaryOperation).filter(type=Operation.Types.SELL)
+
+
+class OperationManager(InheritanceManager):
+    _queryset_class = OperationQuerySet
+
+    def only_purchases(self):
+        return self.get_queryset().only_purchases()
+
+    def only_sales(self):
+        return self.get_queryset().only_sales()
 
 
 class Operation(models.Model):
@@ -47,7 +69,7 @@ class Operation(models.Model):
         TAX_DIVIDEND = 'TaxDividend', 'Налог на дивиденды'
         UNKNOWN = 'Unknown', 'Неизвестен'
 
-    objects = InheritanceManager()
+    objects = OperationManager()
     investment_account = models.ForeignKey(
         'users.InvestmentAccount', verbose_name='Инвестиционный счет', on_delete=models.CASCADE,
         related_name='operations'
@@ -74,7 +96,7 @@ class PayOperation(Operation):
         return f'{self.type}, {self.investment_account}: {self.payment}'
 
 
-class PrimaryOperation(Operation, InstrumentMixin, DealMixin):
+class PrimaryOperation(Operation, InstrumentMixin):
     class Meta:
         verbose_name = 'Покупка/Продажа'
         verbose_name_plural = 'Покупки/Продажа'
@@ -87,6 +109,9 @@ class PrimaryOperation(Operation, InstrumentMixin, DealMixin):
     quantity = models.PositiveIntegerField(verbose_name='Количество', default=0)
     commission = models.DecimalField(verbose_name='Комиссия', max_digits=16, decimal_places=4, default=0)
     _id = models.CharField(verbose_name='ID', max_length=32)
+    deal = models.ForeignKey(
+        'market.Deal', verbose_name='Сделка', on_delete=models.PROTECT, null=True, related_name='operations'
+    )
 
     def __str__(self):
         return f'{self.type}, {self.investment_account}: {self.date}'
@@ -101,13 +126,13 @@ class Transaction(models.Model):
         verbose_name_plural = 'Транзакции'
 
     _id = models.CharField(verbose_name='ID', max_length=32, unique=True)
-    operation = models.ForeignKey(Operation, verbose_name='Операция', on_delete=models.CASCADE)
+    operation = models.ForeignKey(PrimaryOperation, verbose_name='Операция', on_delete=models.CASCADE)
     date = models.DateTimeField(verbose_name='Дата')
     quantity = models.PositiveIntegerField(verbose_name='Количество шт.')
     price = models.DecimalField(verbose_name='Цена/шт.', max_digits=20, decimal_places=4)
 
 
-class DividendOperation(Operation, InstrumentMixin, DealMixin):
+class DividendOperation(Operation, InstrumentMixin):
     class Meta:
         verbose_name = 'Дивиденды'
         verbose_name_plural = 'Дивиденды'
@@ -117,6 +142,9 @@ class DividendOperation(Operation, InstrumentMixin, DealMixin):
         default=0
     )
     tax_date = models.DateTimeField('Дата налога')
+    deal = models.ForeignKey(
+        'market.Deal', verbose_name='Сделка', on_delete=models.PROTECT, null=True, related_name='dividends'
+    )
 
 
 class CommissionOperation(Operation):
