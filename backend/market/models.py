@@ -2,9 +2,10 @@ import collections
 from decimal import Decimal
 
 from django.db import models
-from django.db.models import Sum, F, Q, Case, When, ExpressionWrapper, Avg
+from django.db.models import Sum, F, Q, Case, When, Avg
 from django.db.models.functions import Coalesce
 
+from market.services.income_calculation import SmartInvestorSet
 from operations.models import PrimaryOperation, Operation
 
 
@@ -124,64 +125,25 @@ class Deal(models.Model):
     def recalculation_income(self):
         """ Перерасчет дохода со сделки для каждого участника """
         # XXX
-        operations = (
-            self.operations
-            .prefetch_related('shares')
-            .annotate(
-                total_shares=Sum('shares__value'),
-                price=ExpressionWrapper(F('payment')/F('quantity'), output_field=models.DecimalField())
-            ).order_by('date')
-        )
+        # Получаем все операции покупки/продажи и операции получения дивидендов
+        operations = self.operations.prefetch_related('shares')
+        dividends = self.dividends.all()
+        # Для расчета дохода каждого инвестора от сделки используется этот класс
+        smart_investors_set = SmartInvestorSet()
+        smart_investors_set.add_operations(operations)
+        smart_investors_set.add_operations(dividends)
 
-        total_shares = collections.Counter()
-        tmp_buy = (
-            operations
-            .only_purchases()
-            .aggregate(q=Sum('quantity'))
+        DealIncome.objects.exclude(co_owner__in=smart_investors_set.investors).delete()
+        DealIncome.objects.bulk_create(
+            [DealIncome(deal=self, co_owner=i) for i in smart_investors_set.investors],
+            ignore_conflicts=True
         )
-        total_bought_quantity = tmp_buy['q']
-        total_bought_commission = collections.Counter()
-        total_paid = collections.Counter()
-        tmp_sell = (
-            operations
-            .only_sales()
-            .aggregate(avg=Avg('price'), q=Sum('quantity'), commission=Sum('commission'))
-        )
-        average_sell_price = tmp_sell['avg']
-        total_sold_quantity = tmp_sell['q']
-        total_sold_commission = tmp_sell['commission']
-        dividend_income = (
-            self.dividends
-            .aggregate(income=Coalesce(Sum('payment') + Sum('tax'), 0))['income']
-        )
-        for operation in operations.only_purchases():
-            for share in operation.shares.all():
-                total_shares[share.co_owner] += Decimal(share.value/operation.total_shares*operation.quantity)
-                total_paid[share.co_owner] += \
-                    Decimal(share.value/operation.total_shares*operation.quantity) * operation.price
-                total_bought_commission[share.co_owner] += operation.commission * share.value/operation.total_shares
-
-        DealIncome.objects.exclude(co_owner__in=total_shares).delete()
-        bulk_creates = [DealIncome(deal=self, co_owner=co_owner) for co_owner in total_shares]
-        DealIncome.objects.bulk_create(bulk_creates, ignore_conflicts=True)
-        deal_income = DealIncome.objects.filter(deal=self).all()
-        bulk_updates = []
-        if average_sell_price is None:
-            deal_income.update(value=0)
-        else:
-            for co_owner, share in total_shares.items():
-                average_buy_price = total_paid[co_owner]/share
-                income = (average_buy_price + average_sell_price) * total_sold_quantity
-                # income *= Decimal(total_sold_quantity/total_bought_quantity)
-                income *= Decimal(share/total_bought_quantity)
-                income += total_bought_commission[co_owner]
-                income += share/total_bought_quantity * total_sold_commission
-                income += share/total_bought_quantity * dividend_income
-                deal = deal_income.get(co_owner=co_owner)
-                deal.value = income
-                bulk_updates.append(deal)
-
-            DealIncome.objects.bulk_update(bulk_updates, ['value'])
+        deal_income_set = DealIncome.objects.filter(deal=self).select_related('co_owner')
+        deal_income_bulk_update = []
+        for deal_income in deal_income_set:
+            deal_income.value = smart_investors_set[deal_income.co_owner].capital
+            deal_income_bulk_update.append(deal_income)
+        DealIncome.objects.bulk_update(deal_income_bulk_update, fields=['value'])
 
 
 class DealIncome(models.Model):
