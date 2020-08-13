@@ -1,13 +1,8 @@
-from django.core.validators import MaxValueValidator
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
-from model_utils.managers import InheritanceManager, InheritanceQuerySet
+from django.db.models import Q
 
-
-class InstrumentMixin(models.Model):
-    class Meta:
-        abstract = True
-
-    instrument = models.ForeignKey('market.InstrumentType', verbose_name='Ценная бумага', on_delete=models.PROTECT)
+from core.utils import ProxyInheritanceManager
 
 
 class Currency(models.Model):
@@ -21,32 +16,39 @@ class Currency(models.Model):
     name = models.CharField(verbose_name='Название', max_length=100, unique=True)
 
 
-class OperationQuerySet(InheritanceQuerySet):
-    def only_purchases(self):
-        return self.instance_of(PrimaryOperation).filter(type__in=(Operation.Types.BUY, Operation.Types.BUY_CARD))
-
-    def only_sales(self):
-        return self.instance_of(PrimaryOperation).filter(type=Operation.Types.SELL)
-
-
-class OperationManager(InheritanceManager):
-    _queryset_class = OperationQuerySet
-
-    def only_purchases(self):
-        return self.get_queryset().only_purchases()
-
-    def only_sales(self):
-        return self.get_queryset().only_sales()
+class OperationTypes(models.TextChoices):
+    PAY_IN = 'PayIn', 'Пополнение счета'
+    PAY_OUT = 'PayOut', 'Вывод средств'
+    BUY = 'Buy', 'Покупка ценных бумаг'
+    BUY_CARD = 'BuyCard', 'Покупка ценных бумаг с банковской карты'
+    SELL = 'Sell', 'Продажа ценных бумаг'
+    DIVIDEND = 'Dividend', 'Получение дивидендов'
+    BROKER_COMMISSION = 'BrokerCommission', 'Комиссия брокера'
+    SERVICE_COMMISSION = 'ServiceCommission', 'Комиссия за обслуживание'
+    MARGIN_COMMISSION = 'MarginCommission', 'Комиссия за маржинальную торговлю'
+    TAX = 'Tax', 'Налог'
+    TAX_BACK = 'TaxBack', 'Налоговый вычет/корректировка налога'
+    TAX_DIVIDEND = 'TaxDividend', 'Налог на дивиденды'
+    UNKNOWN = 'Unknown', 'Неизвестен'
 
 
 class Operation(models.Model):
     """ Базовая модель операции, все виды операций наследуются от нее """
+    Types = OperationTypes
+
     class Meta:
         verbose_name = 'Операция'
         verbose_name_plural = 'Операции'
         ordering = ('date', )
         constraints = [
-            models.UniqueConstraint(fields=('type', 'date', 'investment_account'), name='unique operation')
+            models.UniqueConstraint(fields=('investment_account', 'type', 'date'), name='unique_%(class)s'),
+            models.UniqueConstraint(fields=('_id', ), condition=~Q(_id=''), name='unique_id_$(class)s'),
+            models.CheckConstraint(
+                name='%(class)s_restrict_property_set_by_type',
+                check=(
+                    Q(type=OperationTypes.PAY_IN, instrument__isnull=True, quantity=0, commission=0, _id='-1')
+                )
+            )
         ]
 
     class Statuses(models.TextChoices):
@@ -54,67 +56,69 @@ class Operation(models.Model):
         DECLINE = 'Decline', 'Отказано'
         PROGRESS = 'Progress', 'В процессе'
 
-    class Types(models.TextChoices):
-        PAY_OUT = 'PayOut', 'Вывод средств'
-        PAY_IN = 'PayIn', 'Пополнение счета'
-        BUY = 'Buy', 'Покупка ценных бумаг'
-        BUY_CARD = 'BuyCard', 'Покупка ценных бумаг с банковской карты'
-        SELL = 'Sell', 'Продажа ценных бумаг'
-        DIVIDEND = 'Dividend', 'Получение дивидендов'
-        BROKER_COMMISSION = 'BrokerCommission', 'Комиссия брокера'
-        SERVICE_COMMISSION = 'ServiceCommission', 'Комиссия за обслуживание'
-        MARGIN_COMMISSION = 'MarginCommission', 'Комиссия за маржинальную торговлю'
-        TAX = 'Tax', 'Налог'
-        TAX_BACK = 'TaxBack', 'Налоговый вычет/корректировка налога'
-        TAX_DIVIDEND = 'TaxDividend', 'Налог на дивиденды'
-        UNKNOWN = 'Unknown', 'Неизвестен'
-
-    objects = OperationManager()
+    # Общие поля
+    objects = ProxyInheritanceManager()
     investment_account = models.ForeignKey(
         'users.InvestmentAccount', verbose_name='Инвестиционный счет', on_delete=models.CASCADE,
         related_name='operations'
     )
-    # type = models.CharField(verbose_name='Тип', max_length=30, choices=Types.choices, default=Types.UNKNOWN)
+    type = models.CharField(verbose_name='Тип', max_length=30, choices=Types.choices)
     date = models.DateTimeField(verbose_name='Дата')
     is_margin_call = models.BooleanField(default=False)
     payment = models.DecimalField(verbose_name='Оплата', max_digits=20, decimal_places=4)
-    currency = models.ForeignKey('market.CurrencyInstrument', verbose_name='Валюта', on_delete=models.PROTECT)
+    currency = models.ForeignKey(Currency, verbose_name='Валюта', on_delete=models.PROTECT)
 
+    # Поля, актуальные не для всех операций
+    instrument = models.ForeignKey(
+        'market.InstrumentType', verbose_name='Ценная бумага', on_delete=models.PROTECT, null=True,
+        related_name='operations'
+    )
 
-class PayOperation(Operation):
-    class Meta:
-        verbose_name = 'Пополнение/Вывод средств'
-        verbose_name_plural = 'Пополнения/Выводы средств'
-
-    class Types(models.TextChoices):
-        PAY_IN = Operation.Types.PAY_IN
-        PAY_OUT = Operation.Types.PAY_OUT
-
-    type = models.CharField('Тип операции', choices=Types.choices, max_length=30)
-
-    def __str__(self):
-        return f'{self.type}, {self.investment_account}: {self.payment}'
-
-
-class PrimaryOperation(Operation, InstrumentMixin):
-    class Meta:
-        verbose_name = 'Покупка/Продажа'
-        verbose_name_plural = 'Покупки/Продажа'
-
-    class Types(models.TextChoices):
-        BUY = Operation.Types.BUY
-        SELL = Operation.Types.SELL
-
-    type = models.CharField('Тип операции', choices=Types.choices, max_length=30)
+    # Поля, актуальные для покупок и продаж
     quantity = models.PositiveIntegerField(verbose_name='Количество', default=0)
-    commission = models.DecimalField(verbose_name='Комиссия', max_digits=16, decimal_places=4, default=0)
-    _id = models.CharField(verbose_name='ID', max_length=32)
+    commission = models.DecimalField(
+        verbose_name='Комиссия', max_digits=16, decimal_places=4, default=0,
+        validators=[MaxValueValidator(0, 'Коммиссия может быть только отрицательным число или 0')]
+    )
+    _id = models.CharField(verbose_name='ID', max_length=32, default='-1')
     deal = models.ForeignKey(
         'market.Deal', verbose_name='Сделка', on_delete=models.PROTECT, null=True, related_name='operations'
     )
 
-    def __str__(self):
-        return f'{self.type}, {self.investment_account}: {self.date}'
+    # Для налогов на дивиденды
+    tax = models.IntegerField(
+        verbose_name='Налог', default=0,
+        validators=[MaxValueValidator(0, 'Налог должен быть отрицательным числом или 0')]
+    )
+    tax_date = models.DateTimeField('Дата налога', null=True)
+
+
+class PayInOperation(Operation):
+    class Meta:
+        verbose_name = 'Пополнение/Вывод средств'
+        verbose_name_plural = 'Пополнения/Выводы средств'
+        proxy = True
+
+    possible_types = (Operation.Types.PAY_IN, )
+    restrictions = (
+        Q(type__in=possible_types, is_margin_call=False, payment__gt=0,
+          instrument__isnull=True, quantity=0, commission=0, deal__isnull=True,
+          tax=0, tax_date__isnull=True) & ~Q(_id='-1')
+    )
+
+
+class PurchaseOperation(Operation):
+    class Meta:
+        verbose_name = 'Покупка/Продажа'
+        verbose_name_plural = 'Покупки/Продажа'
+        proxy = True
+
+    possible_types = (Operation.Types.BUY, Operation.Types.BUY_CARD)
+    restrictions = (
+        Q(type__in=possible_types, payment__lt=0,
+          quantity__ge=1, deal__isnull=True,
+          tax=0, tax_date__isnull=True) & ~Q(_id='-1')
+    )
 
 
 class Transaction(models.Model):
@@ -126,24 +130,24 @@ class Transaction(models.Model):
         verbose_name_plural = 'Транзакции'
 
     _id = models.CharField(verbose_name='ID', max_length=32, unique=True)
-    operation = models.ForeignKey(PrimaryOperation, verbose_name='Операция', on_delete=models.CASCADE)
+    operation = models.ForeignKey(Operation, verbose_name='Операция', on_delete=models.CASCADE)
     date = models.DateTimeField(verbose_name='Дата')
     quantity = models.PositiveIntegerField(verbose_name='Количество шт.')
     price = models.DecimalField(verbose_name='Цена/шт.', max_digits=20, decimal_places=4)
 
 
-class DividendOperation(Operation, InstrumentMixin):
+class DividendOperation(Operation):
     class Meta:
         verbose_name = 'Дивиденды'
         verbose_name_plural = 'Дивиденды'
+        proxy = True
 
-    tax = models.IntegerField(
-        'Налог', validators=[MaxValueValidator(0, 'Налог должен быть отрицательным числом или 0')],
-        default=0
-    )
-    tax_date = models.DateTimeField('Дата налога')
-    deal = models.ForeignKey(
-        'market.Deal', verbose_name='Сделка', on_delete=models.PROTECT, null=True, related_name='dividends'
+    possible_types = (Operation.Types.BUY, Operation.Types.BUY_CARD)
+    # TODO: уточнить что с айди
+    restrictions = (
+            Q(type__in=possible_types, payment__lt=0,
+              quantity__ge=1, deal__isnull=True,
+              tax=0, tax_date__isnull=True) & ~Q(_id='-1')
     )
 
 
@@ -151,24 +155,21 @@ class CommissionOperation(Operation):
     class Meta:
         verbose_name = 'Комиссия'
         verbose_name_plural = 'Комиссии'
-
-    class Types(models.TextChoices):
-        SERVICE_COMMISSION = Operation.Types.SERVICE_COMMISSION
-        MARGIN_COMMISSION = Operation.Types.MARGIN_COMMISSION
-
-    type = models.CharField('Тип операции', choices=Types.choices, max_length=30)
+        proxy = True
 
 
 class TaxOperation(Operation):
     class Meta:
         verbose_name = 'Налог'
         verbose_name_plural = 'Налоги'
+        proxy = True
 
 
 class TaxBackOperation(Operation):
     class Meta:
         verbose_name = 'Возврат налога'
         verbose_name_plural = 'Возвраты налога'
+        proxy = True
 
 
 class Share(models.Model):
@@ -181,7 +182,7 @@ class Share(models.Model):
         ]
         ordering = ['pk']
 
-    operation = models.ForeignKey(PrimaryOperation, verbose_name='Операция',
+    operation = models.ForeignKey(Operation, verbose_name='Операция',
                                   on_delete=models.CASCADE, related_name='shares')
     co_owner = models.ForeignKey('users.CoOwner', verbose_name='Совладелец',
                                  on_delete=models.CASCADE, related_name='shares')

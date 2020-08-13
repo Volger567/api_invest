@@ -1,10 +1,8 @@
-import collections
-from decimal import Decimal
-
 from django.db import models
-from django.db.models import Sum, F, Q, Case, When, Avg
+from django.db.models import Sum, F, Q, Case, When
 from django.db.models.functions import Coalesce
 
+from core.utils import PseudoBulkCreateManager
 from market.services.income_calculation import SmartInvestorSet
 from operations.models import PrimaryOperation, Operation
 
@@ -19,8 +17,9 @@ class InstrumentType(models.Model):
         CURRENCY = 'Currency', 'Валюта'
         # TODO: Еще Bond, Etf
 
+    objects = PseudoBulkCreateManager()
+    figi = models.CharField(verbose_name='FIGI', max_length=32, primary_key=True)
     name = models.CharField(verbose_name='Название', max_length=200)
-    figi = models.CharField('FIGI', max_length=32, unique=True)
     ticker = models.CharField(verbose_name='Ticker', max_length=16, unique=True)
 
 
@@ -41,7 +40,7 @@ class CurrencyInstrument(InstrumentType):
         return super().save(*args, **kwargs)
 
     def __str__(self):
-        return self.name
+        return str(self.name)
 
 
 class StockInstrument(InstrumentType):
@@ -49,7 +48,6 @@ class StockInstrument(InstrumentType):
     class Meta:
         verbose_name = 'Акция'
         verbose_name_plural = 'Акции'
-        constraints = models.UniqueConstraint
 
     isin = models.CharField(verbose_name='ISIN', max_length=32)
     min_price_increment = models.DecimalField(verbose_name='Шаг цены', max_digits=10, decimal_places=4, default=0)
@@ -57,7 +55,7 @@ class StockInstrument(InstrumentType):
     currency = models.ForeignKey('operations.Currency', verbose_name='Валюта', on_delete=models.CASCADE)
 
     def __str__(self):
-        return self.name
+        return str(self.name)
 
 
 class DealQuerySet(models.QuerySet):

@@ -9,8 +9,7 @@ class TestTinkoffApiPermission:
         pass
 
     def test_init_no_token(self):
-        with pytest.raises(TypeError):
-            TinkoffProfile()
+        pass
 
     def test_init_auth(self):
         assert not TinkoffProfile('something').is_sandbox_token_valid

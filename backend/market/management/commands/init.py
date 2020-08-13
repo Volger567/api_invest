@@ -4,7 +4,7 @@ import os
 from django.contrib.auth import get_user_model
 from django.core.management import BaseCommand
 
-from market.models import CurrencyInstrument, StockInstrument, InstrumentType
+from market.models import StockInstrument
 from operations.models import Currency
 from tinkoff_api import TinkoffProfile
 
@@ -34,12 +34,18 @@ class Command(BaseCommand):
             ('CNY', chr(165),  'Китайский юань'),
             ('TRY', chr(8378), 'Турецкая лира')
         )
-        currencies = [
-            Currency(iso_code=iso, abbreviation=abbr, name=name)
-            for iso, abbr, name in currencies
-        ]
-        logger.info(currencies)
-        InstrumentType.objects.bulk_create(currencies, ignore_conflicts=True)
+        for iso_code, abbr, name in currencies:
+            obj, created = Currency.objects.get_or_create(
+                iso_code=iso_code,
+                defaults={
+                    'abbreviation': abbr,
+                    'name': name
+                }
+            )
+            if created:
+                logger.info(f'Валюта "{iso_code}" создана')
+            else:
+                logger.info(f'Валюта "{iso_code}" уже существует')
         logger.info('Валюты созданы')
 
         logger.info('Создаем супер-пользователя')
@@ -62,9 +68,11 @@ class Command(BaseCommand):
         token = os.getenv('tinkoff_api_production_token') or os.getenv('tinkoff_api_sandbox_token')
         with TinkoffProfile(token) as tp:
             stocks = tp.market_stocks()
+
+        # FIXME: оптимизировать
+        currency_by_iso_code = Currency.objects.in_bulk()
         if options['with_update']:
             for stock in stocks['payload']['instruments']:
-                # TODO: оптимизировать
                 StockInstrument.objects.update_or_create(
                     figi=stock['figi'],
                     defaults={
@@ -73,24 +81,23 @@ class Command(BaseCommand):
                         'isin': stock['isin'],
                         'min_price_increment': stock.get('minPriceIncrement'),
                         'lot': stock['lot'],
-                        'currency_id': stock['currency'],
+                        'currency': currency_by_iso_code[stock['currency']],
                         'name': stock['name']
                     }
                 )
         else:
-            figies = set(StockInstrument.objects.all().values_list('figi', flat=True))
-            new_figies = set(i['figi'] for i in stocks['payload']['instruments'])
-            new_figies -= figies
+            existing_figies = set(StockInstrument.objects.all().values_list('figi', flat=True))
             result = []
             for stock in stocks['payload']['instruments']:
-                if stock['figi'] in new_figies:
+                if stock['figi'] not in existing_figies:
                     result.append(StockInstrument(**{
                         'figi': stock['figi'],
                         'ticker': stock['ticker'],
                         'isin': stock['isin'],
                         'min_price_increment': stock.get('minPriceIncrement', 0),
                         'lot': stock['lot'],
-                        'currency_id': stock['currency'],
+                        'currency': currency_by_iso_code[stock['currency']],
                         'name': stock['name']
                     }))
-            InstrumentType.objects.bulk_create(result)
+            StockInstrument.objects.pseudo_bulk_create(result)
+        logger.info('Список бумаг получен и добавлен в БД')

@@ -4,7 +4,7 @@ from django.db.models import Sum, F, Q
 from django.urls import reverse
 from django.views.generic import FormView, TemplateView, ListView
 
-from market.views import UpdateInvestmentAccount
+from market.views import UpdateInvestmentAccountMixin
 from users.forms import SignupForm, LoginForm
 from users.models import InvestmentAccount, CoOwner
 
@@ -32,7 +32,7 @@ class LogoutView(SuperLogoutView):
     next_page = 'login'
 
 
-class InvestmentAccountsView(LoginRequiredMixin, UpdateInvestmentAccount, TemplateView):
+class InvestmentAccountsView(LoginRequiredMixin, UpdateInvestmentAccountMixin, TemplateView):
     template_name = 'investment_accounts.html'
 
     def get_context_data(self, **kwargs):
@@ -50,7 +50,7 @@ class InvestmentAccountsView(LoginRequiredMixin, UpdateInvestmentAccount, Templa
         return context
 
 
-class InvestmentAccountSettings(LoginRequiredMixin, UpdateInvestmentAccount, ListView):
+class InvestmentAccountSettings(LoginRequiredMixin, UpdateInvestmentAccountMixin, ListView):
     template_name = 'investment_account_settings.html'
     model = CoOwner
     context_object_name = 'co_owners'

@@ -12,8 +12,7 @@ from django.dispatch import receiver
 
 from core import settings
 from market.models import Deal, DealIncome
-from operations.models import PayInOperation, PayOutOperation, ServiceCommissionOperation, PurchaseOperation, \
-    SaleOperation
+from operations.models import Operation, PrimaryOperation, PayOperation, CommissionOperation
 from tinkoff_api.exceptions import InvalidTokenError
 from users.services.update_service import Updater
 
@@ -72,8 +71,8 @@ class InvestmentAccount(models.Model):
             (F('operations__payment')+F('operations__commission'))/F('operations__quantity'),
             output_field=models.DecimalField()
         )
-        q_purchase = Q(instance_of=PurchaseOperation)
-        q_sale = Q(instance_of=SaleOperation)
+        q_purchase = Q(instance_of=PrimaryOperation, type__in=(Operation.Types.BUY, Operation.Types.BUY_CARD))
+        q_sale = Q(instance_of=PrimaryOperation, type=Operation.Types.SELL)
         avg_sum = Avg(f_price, filter=q_purchase) + Avg(f_price, filter=q_sale)
         pieces_sold = Sum('operations__quantity', filter=q_sale)
         total_income_of_opened_deals = (
@@ -97,7 +96,7 @@ class InvestmentAccount(models.Model):
         update_frequency = datetime.timedelta(minutes=float(os.getenv('PROJECT_OPERATIONS_UPDATE_FREQUENCY', 1)))
         try:
             if now - self.sync_at > update_frequency:
-                from_datetime = self.sync_at - datetime.timedelta(hours=12)
+                from_datetime = self.sync_at - datetime.timedelta(hours=6)
                 to_datetime = datetime.datetime.now(tz=pytz.timezone(settings.TIME_ZONE))
                 updater = Updater(from_datetime, to_datetime, self.pk, token=self.token)
                 updater.update_currency_assets()
@@ -197,7 +196,11 @@ def investment_account_post_save(**kwargs):
         # Складываются все пополнения на счет, из них вычитаются выводы со счета и комиссия сервиса
         creator_capital = (
             instance.operations
-            .instance_of(PayInOperation, PayOutOperation, ServiceCommissionOperation)
+            .filter(
+                Q(instance_of=PayOperation) |
+                Q(instance_of=CommissionOperation, type=Operation.Types.SERVICE_COMMISSION)
+            )
+            .instance_of(PayOperation, CommissionOperation)
             .aggregate(s=Coalesce(Sum('payment'), 0))['s']
         )
         co_owner.capital = creator_capital

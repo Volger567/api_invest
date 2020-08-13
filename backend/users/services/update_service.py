@@ -180,7 +180,7 @@ class Updater:
                 logger.info('Операция не является первичной')
 
         for model, bulk_create in final_operations:
-            model.objects.bulk_create(bulk_create, ignore_conflicts=True)
+            model.objects.pseudo_bulk_create(bulk_create, ignore_conflicts=True)
 
         # Обработанные операции
         self.processed_primary_operations = final_operations
