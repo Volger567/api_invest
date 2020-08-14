@@ -14,15 +14,12 @@ class InstrumentType(models.Model):
     class Meta:
         verbose_name = 'Торговый инструмент'
         verbose_name_plural = 'Торговые инструменты'
-        constraints = [
-            models.CheckConstraint(
-                name='%(class)s_restrict_property_set_by_type',
-                check=(InstrumentTypeConstraints.ALL_CONSTRAINTS, )
-            )
-        ]
+        constraints = InstrumentTypeConstraints.ALL_CONSTRAINTS
+
+    objects = ProxyInheritanceManager()
+    proxy_constraints = InstrumentTypeConstraints
 
     # Общие поля
-    objects = ProxyInheritanceManager()
     figi = models.CharField(verbose_name='FIGI', max_length=32, primary_key=True)
     name = models.CharField(verbose_name='Название', max_length=200)
     ticker = models.CharField(verbose_name='Ticker', max_length=16, unique=True)
@@ -45,8 +42,6 @@ class CurrencyInstrument(InstrumentType):
         verbose_name_plural = 'Валюты'
         proxy = True
 
-    possible_types = (InstrumentType.Types.CURRENCY, )
-
     def __str__(self):
         return str(self.name)
 
@@ -57,8 +52,6 @@ class StockInstrument(InstrumentType):
         verbose_name = 'Акция'
         verbose_name_plural = 'Акции'
         proxy = True
-
-    possible_types = (InstrumentType.Types.STOCK, )
 
     def __str__(self):
         return str(self.name)
@@ -160,11 +153,14 @@ class DealIncome(models.Model):
         verbose_name = 'Доход за сделку'
         verbose_name_plural = 'Доходы за сделку'
         constraints = [
-            models.UniqueConstraint(fields=('deal', 'co_owner'), name='unique deal co-owner')
+            models.UniqueConstraint(fields=('deal', 'co_owner'), name='unique_deal_co-owner')
         ]
 
     deal = models.ForeignKey(Deal, verbose_name='Сделка', on_delete=models.CASCADE)
-    co_owner = models.ForeignKey('users.CoOwner', verbose_name='Совладелец', on_delete=models.CASCADE)
+    co_owner = models.ForeignKey(
+        'users.CoOwner', verbose_name='Совладелец', on_delete=models.CASCADE,
+        related_name='deal_income_set'
+    )
     # Сколько совладелец заработал с конкретной сделки
     value = models.DecimalField(verbose_name='Доход', max_digits=20, decimal_places=4, default=0)
 

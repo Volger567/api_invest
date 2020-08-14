@@ -54,6 +54,18 @@ class OperationConstraints:
 
     class PurchaseOperation:
         possible_types = (OperationTypes.BUY, OperationTypes.BUY_CARD)
+        is_abstract = True
+
+    class CardPurchaseOperation:
+        possible_types = (OperationTypes.BUY_CARD, )
+        constraints = (
+            Q(type__in=possible_types, payment__lt=0,
+              instrument__isnull=False, quantity__ge=1,
+              dividend_tax=0, dividend_tax_date__isnull=True) & ~Q(_id='-1')
+        )
+
+    class InvestmentAccountPurchaseOperation:
+        possible_types = (OperationTypes.BUY, )
         constraints = (
             Q(type__in=possible_types, payment__lt=0,
               instrument__isnull=False, quantity__ge=1,
@@ -107,10 +119,20 @@ class OperationConstraints:
               instrument__isnull=True, quantity=0, commission=0,
               deal__isnull=True, dividend_tax=0, dividend_tax_date__isnull=True) & ~Q(_id='-1')
         )
+
     ALL_OPERATIONS = (
-        PayInOperation, PayOutOperation, PurchaseOperation, SaleOperation,
-        DividendOperation, ServiceCommissionOperation, MarginCommissionOperation,
+        PayInOperation, PayOutOperation, InvestmentAccountPurchaseOperation,
+        CardPurchaseOperation, SaleOperation, DividendOperation,
+        ServiceCommissionOperation, MarginCommissionOperation,
         TaxOperation, TaxBackOperation
     )
-    ALL_CONSTRAINTS = reduce(operator.or_, map(operator.attrgetter('constraints'), ALL_OPERATIONS))
-    ALL_CONSTRAINTS |= Q(type=OperationTypes.UNKNOWN)
+    ALL_PROXY_CONSTRAINTS = reduce(operator.or_, map(lambda x: getattr(x, 'constraints', Q()), ALL_OPERATIONS))
+    ALL_PROXY_CONSTRAINTS |= Q(type=OperationTypes.UNKNOWN)
+    ALL_CONSTRAINTS = [
+        models.UniqueConstraint(fields=('investment_account', 'type', 'date'), name='unique_%(class)s'),
+        models.UniqueConstraint(fields=('_id',), condition=~Q(_id=''), name='unique_id_$(class)s'),
+        models.CheckConstraint(
+            name='%(class)s_restrict_property_set_by_type',
+            check=ALL_PROXY_CONSTRAINTS
+        )
+    ]

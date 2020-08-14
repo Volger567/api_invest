@@ -13,6 +13,10 @@ class InstrumentTypeTypes(models.TextChoices):
 
 
 class InstrumentTypeConstraints:
+    class InstrumentType:
+        possible_types = [i[0] for i in InstrumentTypeTypes.choices]
+        is_abstract = True
+
     class CurrencyInstrument:
         possible_types = (InstrumentTypeTypes.CURRENCY, )
         constraints = (
@@ -27,16 +31,14 @@ class InstrumentTypeConstraints:
               lot__ge=1, currency__isnull=False) & ~Q(isin='')
         )
 
-    ALL_INSTRUMENT_TYPES = (CurrencyInstrument, StockInstrument)
+    ALL_INSTRUMENT_TYPES = (InstrumentType, CurrencyInstrument, StockInstrument)
     ALL_PROXY_CONSTRAINTS = reduce(
-        operator.or_, map(operator.attrgetter('constraints'), ALL_INSTRUMENT_TYPES)
+        operator.or_, map(lambda x: getattr(x, 'constraints', Q()), ALL_INSTRUMENT_TYPES)
     )
     ALL_PROXY_CONSTRAINTS |= Q(type=InstrumentTypeTypes.UNKNOWN)
     ALL_CONSTRAINTS = [
-        models.UniqueConstraint(fields=('investment_account', 'type', 'date'), name='unique_%(class)s'),
-        models.UniqueConstraint(fields=('_id',), condition=~Q(_id=''), name='unique_id_$(class)s'),
         models.CheckConstraint(
             name='%(class)s_restrict_property_set_by_type',
-            check=(ALL_PROXY_CONSTRAINTS, )
+            check=ALL_PROXY_CONSTRAINTS
         )
     ]

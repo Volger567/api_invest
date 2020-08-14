@@ -63,7 +63,7 @@ class InvestmentAccountSettings(LoginRequiredMixin, UpdateInvestmentAccountMixin
                 .with_is_creator_annotations()
                 .annotate(
                     limit=F('capital') +
-                    Sum('dealincome__value', filter=Q(investment_account=self.investment_account)))
+                    Sum('deal_income__value', filter=Q(investment_account=self.investment_account)))
                 .order_by('-is_creator', 'investor__username')
             )
         return CoOwner.objects.none()

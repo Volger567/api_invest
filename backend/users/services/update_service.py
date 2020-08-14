@@ -5,14 +5,16 @@
 import collections
 import datetime as dt
 import logging
-from typing import Optional
+from typing import Optional, List, Dict
 
 import dateutil.parser
 from django.apps import apps
 from django.db.models import Min
 
+from core.utils import is_proxy_instance
 from market.models import CurrencyInstrument, InstrumentType, StockInstrument, Deal
-from operations.models import Operation
+from operations.models import Operation, SaleOperation, DividendOperation, \
+    Transaction, PurchaseOperation, Share
 from tinkoff_api import TinkoffProfile
 
 logger = logging.getLogger(__name__)
@@ -25,30 +27,18 @@ class Updater:
         Создание и дополнение сделок на основе полученных операций
     """
 
-    # Получение модели операции по типу операции (в строковом эквиваленте)
-    # model_by_operation_type = {
-    #     Operation.Types.SELL: PrimaryOperation,
-    #     Operation.Types.BUY: PrimaryOperation,
-    #     Operation.Types.BUY_CARD: PrimaryOperation,
-    #     Operation.Types.DIVIDEND: DividendOperation,
-    #     Operation.Types.PAY_IN: PayOperation,
-    #     Operation.Types.PAY_OUT: PayOperation,
-    #     Operation.Types.SERVICE_COMMISSION: CommissionOperation,
-    #     Operation.Types.MARGIN_COMMISSION: CommissionOperation
-    # }
-
     # Получение типа инструмента по строчному эквиваленту
     model_by_instrument_type = {
         InstrumentType.Types.STOCK: StockInstrument,
         InstrumentType.Types.CURRENCY: CurrencyInstrument
     }
 
-    def __init__(self, from_datetime: dt.datetime, to_datetime: dt.datetime, investment_account_pk: int,
+    def __init__(self, from_datetime: dt.datetime, to_datetime: dt.datetime, investment_account_id: int,
                  token: Optional[str] = None, tinkoff_profile: Optional[TinkoffProfile] = None):
         """ Инициализатор
         :param from_datetime: с какой даты получать операции
         :param to_datetime: до какой даты получать операции
-        :param investment_account_pk: id ИС
+        :param investment_account_id: id ИС
         :param token: токен от Tinkoff API, если None, будет использоваться tinkoff_profile
         :param tinkoff_profile: профиль Tinkoff API, если None, будет использоваться token
         """
@@ -65,8 +55,9 @@ class Updater:
         self.from_datetime = from_datetime
         self.to_datetime = to_datetime
         self.timezone = from_datetime.tzinfo
-        self.investment_account_pk = investment_account_pk
+        self.investment_account_id = investment_account_id
         self.operations = []
+        self.transactions = collections.defaultdict(list)
         # Флаг, становится True когда проходит обработка первичных операций
         self._is_processed_primary_operations = False
         # Флаг, становится True когда проходит обработка вторичных операций
@@ -107,7 +98,8 @@ class Updater:
             вторичные не могут быть созданы.
         """
         logger.info('Обработка первичных операций')
-        specify_type_for = (
+        # Типы пе
+        primary_operation_type = (
             Operation.Types.PAY_IN, Operation.Types.PAY_OUT,
             Operation.Types.SERVICE_COMMISSION, Operation.Types.MARGIN_COMMISSION,
             Operation.Types.BUY, Operation.Types.BUY_CARD, Operation.Types.SELL
@@ -117,9 +109,9 @@ class Updater:
             logger.warning('Первичные операции уже обработаны')
             return
 
-        # Словарь, который будет возвращен
-        # Для каждой модели, есть список, который потом будет передан в bulk_create
-        final_operations = collections.defaultdict(list)
+        # Словарь, который будет возвращен.
+        # Ключ - модель, значение - список, который потом будет передан в bulk_create
+        final_operations: Dict[Operation, List[Operation]] = collections.defaultdict(list)
 
         for operation in self.operations.copy():
             logger.info(f'Операция: {operation}')
@@ -132,20 +124,20 @@ class Updater:
             operation_type = operation['operationType']
             # У каждой операции есть эти свойства, поэтому вынесем их
             base_operation_kwargs = {
-                'investment_account_pk': self.investment_account_pk,
+                'investment_account_id': self.investment_account_id,
                 'date': self.timezone.localize(dateutil.parser.isoparse(operation['date']).replace(tzinfo=None)),
                 'is_margin_call': operation['isMarginCall'],
                 'payment': operation['payment'],
                 'currency_id': self.currencies.get(operation['currency'])
             }
-            if operation_type in specify_type_for:
+            if operation_type in primary_operation_type:
                 base_operation_kwargs['type'] = operation_type
             if operation.get('instrumentType') is not None:
                 base_operation_kwargs['instrument'] = (
                     self.model_by_instrument_type[operation['instrumentType']].objects.get(figi=operation['figi'])
                 )
                 logger.info(f'У операции указан инструмент ({base_operation_kwargs["instrument"]})')
-            model = self.model_by_operation_type[operation_type]
+            model = Operation.get_operation_model_by_type(operation_type)
             logger.info(f'Модель операции: {model}')
 
             # Операции, которым достаточно значений из base_operation_kwargs
@@ -162,9 +154,19 @@ class Updater:
                 commission = operation.get('commission')
                 commission = commission['value'] if isinstance(commission, dict) else 0
                 logger.info(f'Комиссия: {commission}')
+                # Добавляем транзакции по операции
+                for transaction in operation['trades']:
+                    self.transactions[operation['id']].append({
+                        'id': transaction['tradeId'],
+                        'date': self.timezone.localize(
+                            dateutil.parser.isoparse(transaction['date']).replace(tzinfo=None)
+                        ),
+                        'quantity': transaction['quantity'],
+                        'price': transaction['price']
+                    })
                 if base_operation_kwargs['payment'] == 0:
                     base_operation_kwargs['payment'] = sum(i['quantity'] * i['price'] for i in operation['trades'])
-                    logger.warning(f'Payment не указана, вычислили из trades: {base_operation_kwargs["payment"]}')
+                    logger.warning(f'payment не указан, вычислили из trades: {base_operation_kwargs["payment"]}')
                 obj = model(
                     **base_operation_kwargs,
                     quantity=operation['quantity'],
@@ -202,7 +204,22 @@ class Updater:
         if not self.is_processed_primary_operations:
             raise ValueError('Сначала вызовите обработку первичных операций')
 
-        # TODO: добавление транзакций в операции
+        logger.info('Обновляем транзакции')
+        # Словарь операций, которым принадлежат транзакции
+        # Ключ - id в БД, значение id в Tinkoff API
+        operation_by_tinkoff_api_operation_id = dict(
+            Operation.objects.filter(_id__in=self.transactions).values_list('_id', 'id')
+        )
+        bulk_create_transactions = []
+        for operation_id, transactions in self.transactions.items():
+            for transaction in transactions:
+                bulk_create_transactions.append(Transaction(
+                    **transaction,
+                    operation_id=operation_by_tinkoff_api_operation_id[operation_id]
+                ))
+        Transaction.objects.bulk_create(bulk_create_transactions, ignore_conflicts=True)
+        logger.info('Транзакции обновлены')
+
         for operation in self.operations.copy():
             logger.info(f'Операция: {operation}')
             operation_type = operation['operationType']
@@ -236,8 +253,8 @@ class Updater:
         logger.info('Обновление сделок')
         operations = (
             Operation.objects
-            .instance_of(PrimaryOperation, DividendOperation)
-            .filter(deal__isnull=True, investment_account_pk=self.investment_account_pk)
+            .filter(PurchaseOperation, SaleOperation, DividendOperation)
+            .filter(deal__isnull=True, investment_account_id=self.investment_account_id)
             .order_by('date')
         )
 
@@ -245,14 +262,14 @@ class Updater:
         recalculation_income_deals = set()
         # Список всех совладельцев счета
         co_owners = (
-            investment_account_model(pk=self.investment_account_pk).co_owners.all()
+            investment_account_model(id=self.investment_account_id).co_owners.all()
             .values_list('pk', 'default_share', named=True)
         )
         logger.info(f'Список совладельцев: {co_owners}')
         bulk_create_share = []
         for operation in operations:
             logger.info(f'Операция: {operation}')
-            if isinstance(operation, PrimaryOperation):
+            if is_proxy_instance(operation, (PurchaseOperation, SaleOperation)):
                 for co_owner in co_owners:
                     logger.info(f'Добавление доли операции для {co_owner}')
                     bulk_create_share.append(
@@ -260,7 +277,8 @@ class Updater:
                     )
                 deal, created = (
                     Deal.objects.opened()
-                    .get_or_create(instrument=operation.instrument, investment_account_pk=self.investment_account_pk)
+                    .get_or_create(instrument=operation.instrument,
+                                   investment_account_id=self.investment_account_id)
                 )
                 if created:
                     logger.info('Сделка создана')
@@ -272,7 +290,7 @@ class Updater:
                 logger.info('Дивиденды')
                 (
                     Deal.objects
-                    .filter(instrument=operation.instrument, investment_account_pk=self.investment_account_pk)
+                    .filter(instrument=operation.instrument, investment_account_id=self.investment_account_id)
                     .annotate(opened_date=Min('operations__date'))
                     .filter(opened_date__lte=operation.date).last('opened_date').operations.add(operation)
                 )
@@ -290,7 +308,7 @@ class Updater:
         currency_actives = self.tinkoff_profile.portfolio_currencies()['payload']['currencies']
         (
             investment_account_model.objects
-            .get(pk=self.investment_account_pk).currency_assets
+            .get(id=self.investment_account_id).currency_assets
             .exclude(currency__iso_code__in=[c['currency'] for c in currency_actives]).delete()
         )
         for currency in currency_actives:

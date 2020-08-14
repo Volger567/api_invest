@@ -65,6 +65,28 @@ class Operation(models.Model):
     )
     dividend_tax_date = models.DateTimeField('Дата налога', null=True)
 
+    @staticmethod
+    def get_operation_model_by_type(operation_type):
+        # Получение модели операции по типу операции (в строковом эквиваленте)
+        return {
+            Operation.Types.SELL: SaleOperation,
+            Operation.Types.BUY: CardPurchaseOperation,
+            Operation.Types.BUY_CARD: InvestmentAccountPurchaseOperation,
+            Operation.Types.DIVIDEND: DividendOperation,
+            Operation.Types.PAY_IN: PayInOperation,
+            Operation.Types.PAY_OUT: PayOutOperation,
+            Operation.Types.SERVICE_COMMISSION: ServiceCommissionOperation,
+            Operation.Types.MARGIN_COMMISSION: MarginCommissionOperation,
+            Operation.Types.TAX: TaxOperation,
+            Operation.Types.TAX_BACK: TaxBackOperation
+        }.get(operation_type)
+
+    def __str__(self):
+        return f'{self.get_operation_model_by_type(self.type)}({self.pk}): {self.date}'
+
+    def __repr__(self):
+        return f'<{str(self)}>'
+
 
 class PayInOperation(Operation):
     class Meta:
@@ -94,6 +116,20 @@ class PurchaseOperation(Operation):
         proxy = True
 
 
+class CardPurchaseOperation(Operation):
+    class Meta:
+        verbose_name = 'Покупка с карты'
+        verbose_name_plural = 'Покупки с карты'
+        proxy = True
+
+
+class InvestmentAccountPurchaseOperation(Operation):
+    class Meta:
+        verbose_name = 'Покупка с ИС'
+        verbose_name_plural = 'Покупки с ИС'
+        proxy = True
+
+
 class SaleOperation(Operation):
     class Meta:
         verbose_name = 'Продажа'
@@ -109,7 +145,7 @@ class Transaction(models.Model):
         verbose_name = 'Транзакции'
         verbose_name_plural = 'Транзакции'
 
-    _id = models.CharField(verbose_name='ID', max_length=32, unique=True)
+    id = models.CharField(verbose_name='ID', max_length=32, primary_key=True)
     operation = models.ForeignKey(Operation, verbose_name='Операция', on_delete=models.CASCADE)
     date = models.DateTimeField(verbose_name='Дата')
     quantity = models.PositiveIntegerField(verbose_name='Количество шт.')
