@@ -2,25 +2,39 @@ from django.db import models
 from django.db.models import Sum, F, Q, Case, When
 from django.db.models.functions import Coalesce
 
-from core.utils import PseudoBulkCreateManager
+from core.utils import ProxyInheritanceManager
+from market.models_constraints import InstrumentTypeConstraints, InstrumentTypeTypes
 from market.services.income_calculation import SmartInvestorSet
-from operations.models import PrimaryOperation, Operation
 
 
 class InstrumentType(models.Model):
+    Types = InstrumentTypeTypes
+
     class Meta:
         verbose_name = 'Торговый инструмент'
         verbose_name_plural = 'Торговые инструменты'
+        constraints = [
+            models.CheckConstraint(
+                name='%(class)s_restrict_property_set_by_type',
+                check=(InstrumentTypeConstraints.ALL_CONSTRAINTS, )
+            )
+        ]
 
-    class Types(models.TextChoices):
-        STOCK = 'Stock', 'Акция'
-        CURRENCY = 'Currency', 'Валюта'
-        # TODO: Еще Bond, Etf
-
-    objects = PseudoBulkCreateManager()
+    # Общие поля
+    objects = ProxyInheritanceManager()
     figi = models.CharField(verbose_name='FIGI', max_length=32, primary_key=True)
     name = models.CharField(verbose_name='Название', max_length=200)
     ticker = models.CharField(verbose_name='Ticker', max_length=16, unique=True)
+
+    # Для валют
+    iso_code = models.CharField(verbose_name='Код', max_length=3, default='')
+    abbreviation = models.CharField(verbose_name='Знак', max_length=16, default='')
+
+    # Для ценных бумаг
+    isin = models.CharField(verbose_name='ISIN', max_length=32, default='')
+    min_price_increment = models.DecimalField(verbose_name='Шаг цены', max_digits=10, decimal_places=4, default=0)
+    lot = models.PositiveIntegerField(verbose_name='шт/лот', default=0)
+    currency = models.ForeignKey('operations.Currency', verbose_name='Валюта', on_delete=models.CASCADE, null=True)
 
 
 class CurrencyInstrument(InstrumentType):
@@ -28,16 +42,9 @@ class CurrencyInstrument(InstrumentType):
     class Meta:
         verbose_name = 'Валюта'
         verbose_name_plural = 'Валюты'
+        proxy = True
 
-    # iso_code не primary_key потому что у валют он может меняться
-    iso_code = models.CharField(verbose_name='Код', max_length=3, unique=True)
-    abbreviation = models.CharField(verbose_name='Знак', max_length=16)
-
-    def save(self, *args, **kwargs):
-        iso_code = self.iso_code
-        if not iso_code.isupper():
-            self.iso_code = iso_code.upper()
-        return super().save(*args, **kwargs)
+    possible_types = (InstrumentType.Types.CURRENCY, )
 
     def __str__(self):
         return str(self.name)
@@ -48,11 +55,9 @@ class StockInstrument(InstrumentType):
     class Meta:
         verbose_name = 'Акция'
         verbose_name_plural = 'Акции'
+        proxy = True
 
-    isin = models.CharField(verbose_name='ISIN', max_length=32)
-    min_price_increment = models.DecimalField(verbose_name='Шаг цены', max_digits=10, decimal_places=4, default=0)
-    lot = models.PositiveIntegerField(verbose_name='шт/лот')
-    currency = models.ForeignKey('operations.Currency', verbose_name='Валюта', on_delete=models.CASCADE)
+    possible_types = (InstrumentType.Types.STOCK, )
 
     def __str__(self):
         return str(self.name)

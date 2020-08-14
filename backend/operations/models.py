@@ -1,8 +1,9 @@
-from django.core.validators import MaxValueValidator, MinValueValidator
+from django.core.validators import MaxValueValidator
 from django.db import models
 from django.db.models import Q
 
 from core.utils import ProxyInheritanceManager
+from operations.models_constraints import OperationTypes, OperationConstraints
 
 
 class Currency(models.Model):
@@ -14,22 +15,6 @@ class Currency(models.Model):
     iso_code = models.CharField(verbose_name='Код', max_length=3, unique=True, primary_key=True)
     abbreviation = models.CharField(verbose_name='Символ', max_length=16)
     name = models.CharField(verbose_name='Название', max_length=100, unique=True)
-
-
-class OperationTypes(models.TextChoices):
-    PAY_IN = 'PayIn', 'Пополнение счета'
-    PAY_OUT = 'PayOut', 'Вывод средств'
-    BUY = 'Buy', 'Покупка ценных бумаг'
-    BUY_CARD = 'BuyCard', 'Покупка ценных бумаг с банковской карты'
-    SELL = 'Sell', 'Продажа ценных бумаг'
-    DIVIDEND = 'Dividend', 'Получение дивидендов'
-    BROKER_COMMISSION = 'BrokerCommission', 'Комиссия брокера'
-    SERVICE_COMMISSION = 'ServiceCommission', 'Комиссия за обслуживание'
-    MARGIN_COMMISSION = 'MarginCommission', 'Комиссия за маржинальную торговлю'
-    TAX = 'Tax', 'Налог'
-    TAX_BACK = 'TaxBack', 'Налоговый вычет/корректировка налога'
-    TAX_DIVIDEND = 'TaxDividend', 'Налог на дивиденды'
-    UNKNOWN = 'Unknown', 'Неизвестен'
 
 
 class Operation(models.Model):
@@ -45,9 +30,7 @@ class Operation(models.Model):
             models.UniqueConstraint(fields=('_id', ), condition=~Q(_id=''), name='unique_id_$(class)s'),
             models.CheckConstraint(
                 name='%(class)s_restrict_property_set_by_type',
-                check=(
-                    Q(type=OperationTypes.PAY_IN, instrument__isnull=True, quantity=0, commission=0, _id='-1')
-                )
+                check=(OperationConstraints.ALL_CONSTRAINTS, )
             )
         ]
 
@@ -86,39 +69,47 @@ class Operation(models.Model):
     )
 
     # Для налогов на дивиденды
-    tax = models.IntegerField(
+    dividend_tax = models.IntegerField(
         verbose_name='Налог', default=0,
         validators=[MaxValueValidator(0, 'Налог должен быть отрицательным числом или 0')]
     )
-    tax_date = models.DateTimeField('Дата налога', null=True)
+    dividend_tax_date = models.DateTimeField('Дата налога', null=True)
 
 
 class PayInOperation(Operation):
     class Meta:
-        verbose_name = 'Пополнение/Вывод средств'
-        verbose_name_plural = 'Пополнения/Выводы средств'
+        verbose_name = 'Пополнение средств'
+        verbose_name_plural = 'Пополнения средств'
         proxy = True
 
-    possible_types = (Operation.Types.PAY_IN, )
-    restrictions = (
-        Q(type__in=possible_types, is_margin_call=False, payment__gt=0,
-          instrument__isnull=True, quantity=0, commission=0, deal__isnull=True,
-          tax=0, tax_date__isnull=True) & ~Q(_id='-1')
-    )
+    possible_types = OperationConstraints.PayInOperation.possible_types
+
+
+class PayOutOperation(Operation):
+    class Meta:
+        verbose_name = 'Вывод средств'
+        verbose_name_plural = 'Выводы средств'
+        proxy = True
+
+    possible_types = OperationConstraints.PayOutOperation.possible_types
 
 
 class PurchaseOperation(Operation):
     class Meta:
-        verbose_name = 'Покупка/Продажа'
-        verbose_name_plural = 'Покупки/Продажа'
+        verbose_name = 'Покупка'
+        verbose_name_plural = 'Покупки'
         proxy = True
 
-    possible_types = (Operation.Types.BUY, Operation.Types.BUY_CARD)
-    restrictions = (
-        Q(type__in=possible_types, payment__lt=0,
-          quantity__ge=1, deal__isnull=True,
-          tax=0, tax_date__isnull=True) & ~Q(_id='-1')
-    )
+    possible_types = OperationConstraints.PurchaseOperation.possible_types
+
+
+class SaleOperation(Operation):
+    class Meta:
+        verbose_name = 'Продажа'
+        verbose_name_plural = 'Продажи'
+        proxy = True
+
+    possible_types = OperationConstraints.SaleOperation.possible_types
 
 
 class Transaction(models.Model):
@@ -142,20 +133,25 @@ class DividendOperation(Operation):
         verbose_name_plural = 'Дивиденды'
         proxy = True
 
-    possible_types = (Operation.Types.BUY, Operation.Types.BUY_CARD)
-    # TODO: уточнить что с айди
-    restrictions = (
-            Q(type__in=possible_types, payment__lt=0,
-              quantity__ge=1, deal__isnull=True,
-              tax=0, tax_date__isnull=True) & ~Q(_id='-1')
-    )
+    possible_types = OperationConstraints.DividendOperation.possible_types
 
 
-class CommissionOperation(Operation):
+class ServiceCommissionOperation(Operation):
     class Meta:
-        verbose_name = 'Комиссия'
-        verbose_name_plural = 'Комиссии'
+        verbose_name = 'Комиссия за обслуживание'
+        verbose_name_plural = 'Комиссии за обслуживание'
         proxy = True
+
+    possible_types = OperationConstraints.ServiceCommissionOperation.possible_types
+
+
+class MarginCommissionOperation(Operation):
+    class Meta:
+        verbose_name = 'Комиссия за маржинальную торговлю'
+        verbose_name_plural = 'Комиссии за обслуживание'
+        proxy = True
+
+    possible_types = OperationConstraints.MarginCommissionOperation.possible_types
 
 
 class TaxOperation(Operation):
@@ -164,12 +160,16 @@ class TaxOperation(Operation):
         verbose_name_plural = 'Налоги'
         proxy = True
 
+    possible_types = OperationConstraints.TaxOperation.possible_types
+
 
 class TaxBackOperation(Operation):
     class Meta:
         verbose_name = 'Возврат налога'
         verbose_name_plural = 'Возвраты налога'
         proxy = True
+
+    possible_types = OperationConstraints.TaxBackOperation.possible_types
 
 
 class Share(models.Model):

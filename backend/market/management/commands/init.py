@@ -76,7 +76,6 @@ class Command(BaseCommand):
                 StockInstrument.objects.update_or_create(
                     figi=stock['figi'],
                     defaults={
-                        'figi': stock['figi'],
                         'ticker': stock['ticker'],
                         'isin': stock['isin'],
                         'min_price_increment': stock.get('minPriceIncrement'),

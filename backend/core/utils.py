@@ -1,4 +1,5 @@
 from django.db import models
+from django.db.models import Q
 
 
 def is_proxy_instance(operation, operation_classes):
@@ -22,6 +23,10 @@ class ProxyInheritanceQuerySet(models.QuerySet):
             total_types |= set(types)
         return self.filter(type__in=total_types)
 
+    def filter(self, *args, **kwargs):
+        # TODO
+        return super().filter(*args, **kwargs)
+
 
 class ProxyInheritanceManager(models.Manager):
     def get_queryset(self):
@@ -29,9 +34,9 @@ class ProxyInheritanceManager(models.Manager):
         if types is None or isinstance(types, str) and types != '__all__':
             raise ValueError(f'У модели {self.model} должен быть указан possible_types')
         if types == '__all__':
-            type_filter = models.Q()
+            type_filter = Q()
         else:
-            type_filter = models.Q(type__in=types)
+            type_filter = Q(type__in=types)
         qs = ProxyInheritanceQuerySet(self.model, using=self._db).filter(type_filter)
         return qs
 
