@@ -1,9 +1,8 @@
 from django.core.validators import MaxValueValidator
 from django.db import models
-from django.db.models import Q
 
 from core.utils import ProxyInheritanceManager
-from operations.models_constraints import OperationTypes, OperationConstraints
+from operations.models_constraints import OperationTypes, OperationConstraints, OperationStatuses
 
 
 class Currency(models.Model):
@@ -20,27 +19,18 @@ class Currency(models.Model):
 class Operation(models.Model):
     """ Базовая модель операции, все виды операций наследуются от нее """
     Types = OperationTypes
+    Statuses = OperationStatuses
 
     class Meta:
         verbose_name = 'Операция'
         verbose_name_plural = 'Операции'
         ordering = ('date', )
-        constraints = [
-            models.UniqueConstraint(fields=('investment_account', 'type', 'date'), name='unique_%(class)s'),
-            models.UniqueConstraint(fields=('_id', ), condition=~Q(_id=''), name='unique_id_$(class)s'),
-            models.CheckConstraint(
-                name='%(class)s_restrict_property_set_by_type',
-                check=(OperationConstraints.ALL_CONSTRAINTS, )
-            )
-        ]
+        constraints = OperationConstraints.ALL_CONSTRAINTS
 
-    class Statuses(models.TextChoices):
-        DONE = 'Done', 'Выполнено'
-        DECLINE = 'Decline', 'Отказано'
-        PROGRESS = 'Progress', 'В процессе'
+    objects = ProxyInheritanceManager()
+    proxy_constraints = OperationConstraints
 
     # Общие поля
-    objects = ProxyInheritanceManager()
     investment_account = models.ForeignKey(
         'users.InvestmentAccount', verbose_name='Инвестиционный счет', on_delete=models.CASCADE,
         related_name='operations'
@@ -82,8 +72,6 @@ class PayInOperation(Operation):
         verbose_name_plural = 'Пополнения средств'
         proxy = True
 
-    possible_types = OperationConstraints.PayInOperation.possible_types
-
 
 class PayOutOperation(Operation):
     class Meta:
@@ -91,7 +79,12 @@ class PayOutOperation(Operation):
         verbose_name_plural = 'Выводы средств'
         proxy = True
 
-    possible_types = OperationConstraints.PayOutOperation.possible_types
+
+class PayOperation(Operation):
+    class Meta:
+        verbose_name = 'Пополнение/Вывод средств'
+        verbose_name_plural = 'Пополнения/Выводы средств'
+        proxy = True
 
 
 class PurchaseOperation(Operation):
@@ -100,16 +93,12 @@ class PurchaseOperation(Operation):
         verbose_name_plural = 'Покупки'
         proxy = True
 
-    possible_types = OperationConstraints.PurchaseOperation.possible_types
-
 
 class SaleOperation(Operation):
     class Meta:
         verbose_name = 'Продажа'
         verbose_name_plural = 'Продажи'
         proxy = True
-
-    possible_types = OperationConstraints.SaleOperation.possible_types
 
 
 class Transaction(models.Model):
@@ -133,16 +122,12 @@ class DividendOperation(Operation):
         verbose_name_plural = 'Дивиденды'
         proxy = True
 
-    possible_types = OperationConstraints.DividendOperation.possible_types
-
 
 class ServiceCommissionOperation(Operation):
     class Meta:
         verbose_name = 'Комиссия за обслуживание'
         verbose_name_plural = 'Комиссии за обслуживание'
         proxy = True
-
-    possible_types = OperationConstraints.ServiceCommissionOperation.possible_types
 
 
 class MarginCommissionOperation(Operation):
@@ -151,8 +136,6 @@ class MarginCommissionOperation(Operation):
         verbose_name_plural = 'Комиссии за обслуживание'
         proxy = True
 
-    possible_types = OperationConstraints.MarginCommissionOperation.possible_types
-
 
 class TaxOperation(Operation):
     class Meta:
@@ -160,16 +143,12 @@ class TaxOperation(Operation):
         verbose_name_plural = 'Налоги'
         proxy = True
 
-    possible_types = OperationConstraints.TaxOperation.possible_types
-
 
 class TaxBackOperation(Operation):
     class Meta:
         verbose_name = 'Возврат налога'
         verbose_name_plural = 'Возвраты налога'
         proxy = True
-
-    possible_types = OperationConstraints.TaxBackOperation.possible_types
 
 
 class Share(models.Model):

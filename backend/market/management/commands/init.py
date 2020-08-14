@@ -98,5 +98,5 @@ class Command(BaseCommand):
                         'currency': currency_by_iso_code[stock['currency']],
                         'name': stock['name']
                     }))
-            StockInstrument.objects.pseudo_bulk_create(result)
+            StockInstrument.objects.bulk_create(result)
         logger.info('Список бумаг получен и добавлен в БД')

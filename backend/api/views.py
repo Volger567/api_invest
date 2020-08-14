@@ -13,7 +13,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.viewsets import ModelViewSet
 
-from operations.models import Share, PrimaryOperation
+from operations.models import Share, PurchaseOperation, SaleOperation
 from users.models import InvestmentAccount, Investor, CoOwner
 from .exceptions import TotalCapitalGrowThanMaxCapital, TotalDefaultShareGrowThan100
 from .permissions import RequestUserPermissions
@@ -196,7 +196,10 @@ class CoOwnersUpdateView(APIView):
             Share.objects.filter(operation__investment_account=updated_investment_account).delete()
             co_owners = updated_investment_account.co_owners.values_list('pk', 'default_share', named=True)
             bulk_creates = []
-            operations = updated_investment_account.operations.instance_of(PrimaryOperation)
+            operations = (
+                updated_investment_account.operations
+                .filter(proxy_instance_of=(PurchaseOperation, SaleOperation))
+            )
             for operation in operations:
                 for co_owner in co_owners:
                     bulk_creates.append(Share(

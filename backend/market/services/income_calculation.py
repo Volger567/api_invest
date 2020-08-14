@@ -5,10 +5,11 @@ from decimal import Decimal
 from typing import Union, Dict, NoReturn
 
 # Как правило, это либо username, либо id, либо CoOwner
-from operations.models import Operation, PrimaryOperation, DividendOperation
+from core.utils import is_proxy_instance
+from operations.models import DividendOperation, SaleOperation, PurchaseOperation
 
 T_INVESTOR = Union[str, int, 'users.CoOwner']
-T_OPERATIONS = Union[PrimaryOperation, DividendOperation]
+T_OPERATIONS = Union[PurchaseOperation, SaleOperation, DividendOperation]
 T_OPERATIONS_QUERYSET = Union['django.db.models.QuerySet']
 
 
@@ -27,16 +28,16 @@ class SmartInvestorSet:
     def add_operation(self, operation: T_OPERATIONS) -> None:
         """ Добавляет одну операцию """
         # FIXME: считать дивиденды, надо относительно момента, когда была див. отсечка
-        if isinstance(operation, DividendOperation):
+        if is_proxy_instance(operation, DividendOperation):
             for investor in self.investors.values():
                 # Капитал инвестора увеличивается на
                 # (доход с дивидендов + налог на дивиденды) * долю акций инвестора среди других инвесторов
-                investor.capital += (operation.payment + operation.tax) * investor.share_of_stock_quantity
+                investor.capital += (operation.payment + operation.dividend_tax) * investor.share_of_stock_quantity
                 investor.last_dividend_share = investor.share_of_stock_quantity
-        elif isinstance(operation, PrimaryOperation):
+        elif is_proxy_instance(operation, (PurchaseOperation, SaleOperation)):
             for share in operation.shares.all():
                 investor = self[share.co_owner]
-                if operation.type in (Operation.Types.BUY, Operation.Types.BUY_CARD):
+                if is_proxy_instance(operation, PurchaseOperation):
                     # Количество акций у инвестора увеличивается на
                     # количество купленных за операцию акций * долю инвестора в операции
                     investor.stock_quantity += operation.quantity*share.value
@@ -45,7 +46,7 @@ class SmartInvestorSet:
                     # P.S: стоимость операции - отрицательное число для покупок, а для продаж положительное,
                     # поэтому формулы одинаковые для покупки и продажи
                     investor.capital += (operation.payment + operation.commission) * share.value
-                elif operation.type == Operation.Types.SELL:
+                else:
                     # Количество акций у инвестора уменьшается на
                     # количество проданых за операцию акций * долю инвестора в операции
                     investor.stock_quantity -= operation.quantity*share.value/100

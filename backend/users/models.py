@@ -11,8 +11,9 @@ from django.db.models.signals import post_save
 from django.dispatch import receiver
 
 from core import settings
+from core.utils import ProxyQ
 from market.models import Deal, DealIncome
-from operations.models import Operation, PrimaryOperation, PayOperation, CommissionOperation
+from operations.models import PurchaseOperation, SaleOperation, PayOperation, ServiceCommissionOperation
 from tinkoff_api.exceptions import InvalidTokenError
 from users.services.update_service import Updater
 
@@ -71,8 +72,8 @@ class InvestmentAccount(models.Model):
             (F('operations__payment')+F('operations__commission'))/F('operations__quantity'),
             output_field=models.DecimalField()
         )
-        q_purchase = Q(instance_of=PrimaryOperation, type__in=(Operation.Types.BUY, Operation.Types.BUY_CARD))
-        q_sale = Q(instance_of=PrimaryOperation, type=Operation.Types.SELL)
+        q_purchase = ProxyQ(proxy_instance_of=PurchaseOperation)
+        q_sale = ProxyQ(proxy_instance_of=SaleOperation)
         avg_sum = Avg(f_price, filter=q_purchase) + Avg(f_price, filter=q_sale)
         pieces_sold = Sum('operations__quantity', filter=q_sale)
         total_income_of_opened_deals = (
@@ -196,11 +197,7 @@ def investment_account_post_save(**kwargs):
         # Складываются все пополнения на счет, из них вычитаются выводы со счета и комиссия сервиса
         creator_capital = (
             instance.operations
-            .filter(
-                Q(instance_of=PayOperation) |
-                Q(instance_of=CommissionOperation, type=Operation.Types.SERVICE_COMMISSION)
-            )
-            .instance_of(PayOperation, CommissionOperation)
+            .filter(proxy_instance_of=(PayOperation, ServiceCommissionOperation))
             .aggregate(s=Coalesce(Sum('payment'), 0))['s']
         )
         co_owner.capital = creator_capital

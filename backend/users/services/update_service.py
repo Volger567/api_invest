@@ -12,7 +12,7 @@ from django.apps import apps
 from django.db.models import Min
 
 from market.models import CurrencyInstrument, InstrumentType, StockInstrument, Deal
-from operations.models import Operation, PrimaryOperation, DividendOperation, PayOperation, CommissionOperation, Share
+from operations.models import Operation
 from tinkoff_api import TinkoffProfile
 
 logger = logging.getLogger(__name__)
@@ -26,16 +26,16 @@ class Updater:
     """
 
     # Получение модели операции по типу операции (в строковом эквиваленте)
-    model_by_operation_type = {
-        Operation.Types.SELL: PrimaryOperation,
-        Operation.Types.BUY: PrimaryOperation,
-        Operation.Types.BUY_CARD: PrimaryOperation,
-        Operation.Types.DIVIDEND: DividendOperation,
-        Operation.Types.PAY_IN: PayOperation,
-        Operation.Types.PAY_OUT: PayOperation,
-        Operation.Types.SERVICE_COMMISSION: CommissionOperation,
-        Operation.Types.MARGIN_COMMISSION: CommissionOperation
-    }
+    # model_by_operation_type = {
+    #     Operation.Types.SELL: PrimaryOperation,
+    #     Operation.Types.BUY: PrimaryOperation,
+    #     Operation.Types.BUY_CARD: PrimaryOperation,
+    #     Operation.Types.DIVIDEND: DividendOperation,
+    #     Operation.Types.PAY_IN: PayOperation,
+    #     Operation.Types.PAY_OUT: PayOperation,
+    #     Operation.Types.SERVICE_COMMISSION: CommissionOperation,
+    #     Operation.Types.MARGIN_COMMISSION: CommissionOperation
+    # }
 
     # Получение типа инструмента по строчному эквиваленту
     model_by_instrument_type = {
@@ -180,7 +180,7 @@ class Updater:
                 logger.info('Операция не является первичной')
 
         for model, bulk_create in final_operations:
-            model.objects.pseudo_bulk_create(bulk_create, ignore_conflicts=True)
+            model.objects.bulk_create(bulk_create, ignore_conflicts=True)
 
         # Обработанные операции
         self.processed_primary_operations = final_operations

@@ -28,6 +28,15 @@ class InstrumentTypeConstraints:
         )
 
     ALL_INSTRUMENT_TYPES = (CurrencyInstrument, StockInstrument)
-    ALL_CONSTRAINTS = reduce(
+    ALL_PROXY_CONSTRAINTS = reduce(
         operator.or_, map(operator.attrgetter('constraints'), ALL_INSTRUMENT_TYPES)
     )
+    ALL_PROXY_CONSTRAINTS |= Q(type=InstrumentTypeTypes.UNKNOWN)
+    ALL_CONSTRAINTS = [
+        models.UniqueConstraint(fields=('investment_account', 'type', 'date'), name='unique_%(class)s'),
+        models.UniqueConstraint(fields=('_id',), condition=~Q(_id=''), name='unique_id_$(class)s'),
+        models.CheckConstraint(
+            name='%(class)s_restrict_property_set_by_type',
+            check=(ALL_PROXY_CONSTRAINTS, )
+        )
+    ]

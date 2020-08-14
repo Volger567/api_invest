@@ -2,9 +2,10 @@ from django.db import models
 from django.db.models import Sum, F, Q, Case, When
 from django.db.models.functions import Coalesce
 
-from core.utils import ProxyInheritanceManager
+from core.utils import ProxyInheritanceManager, ProxyQ
 from market.models_constraints import InstrumentTypeConstraints, InstrumentTypeTypes
 from market.services.income_calculation import SmartInvestorSet
+from operations.models import SaleOperation, PurchaseOperation, DividendOperation
 
 
 class InstrumentType(models.Model):
@@ -64,8 +65,8 @@ class StockInstrument(InstrumentType):
 
 
 class DealQuerySet(models.QuerySet):
-    _sale_filter = Q(instance_of=PrimaryOperation, type=Operation.Types.SELL)
-    _purchase_filter = Q(instance_of=PrimaryOperation, type__in=(Operation.Types.BUY, Operation.Types.BUY_CARD))
+    _sale_filter = ProxyQ(proxy_instance_of=SaleOperation)
+    _purchase_filter = ProxyQ(proxy_instance_of=PurchaseOperation)
 
     def _with_quantity_annotation_by_operation_type(self):
         return self.annotate(
@@ -129,8 +130,12 @@ class Deal(models.Model):
         """ Перерасчет дохода со сделки для каждого участника """
         # XXX
         # Получаем все операции покупки/продажи и операции получения дивидендов
-        operations = self.operations.prefetch_related('shares')
-        dividends = self.dividends.all()
+        operations = (
+            self.operations
+            .filter(proxy_instance_of=(PurchaseOperation, SaleOperation))
+            .prefetch_related('shares')
+        )
+        dividends = self.operations.filter(proxy_instance_of=DividendOperation).all()
         # Для расчета дохода каждого инвестора от сделки используется этот класс
         smart_investors_set = SmartInvestorSet()
         smart_investors_set.add_operations(operations)

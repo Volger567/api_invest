@@ -21,7 +21,17 @@ class OperationTypes(models.TextChoices):
     UNKNOWN = 'Unknown', 'Неизвестен'
 
 
+class OperationStatuses(models.TextChoices):
+    DONE = 'Done', 'Выполнено'
+    DECLINE = 'Decline', 'Отказано'
+    PROGRESS = 'Progress', 'В процессе'
+
+
 class OperationConstraints:
+    class Operation:
+        possible_types = [i[0] for i in OperationTypes.choices]
+        is_abstract = True
+
     class PayInOperation:
         possible_types = (OperationTypes.PAY_IN, )
         constraints = (
@@ -37,6 +47,10 @@ class OperationConstraints:
               instrument__isnull=True, quantity=0, commission=0, deal__isnull=True,
               dividend_tax=0, dividend_tax_date__isnull=True) & ~Q(_id='-1')
         )
+
+    class PayOperation:
+        possible_types = (OperationTypes.PAY_IN, OperationTypes.PAY_OUT)
+        is_abstract = True
 
     class PurchaseOperation:
         possible_types = (OperationTypes.BUY, OperationTypes.BUY_CARD)
