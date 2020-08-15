@@ -59,7 +59,7 @@ class ProxyInheritanceManager(models.Manager):
         if _get_is_abstract_by_proxy_model(self.model):
             raise ValueError('Класс является абстрактным, его экземпляр нельзя сохранить')
         for obj in objs:
-            obj.type = _get_possible_types_by_proxy_model(obj)[0]
+            obj.type = _get_possible_types_by_proxy_model(obj.__class__)[0]
         return super().bulk_create(objs, *args, **kwargs)
 
     def create(self, *args, **kwargs):

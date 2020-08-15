@@ -60,7 +60,7 @@ class OperationConstraints:
         possible_types = (OperationTypes.BUY_CARD, )
         constraints = (
             Q(type__in=possible_types, payment__lt=0,
-              instrument__isnull=False, quantity__ge=1,
+              instrument__isnull=False, quantity__gte=1,
               dividend_tax=0, dividend_tax_date__isnull=True) & ~Q(_id='-1')
         )
 
@@ -68,7 +68,7 @@ class OperationConstraints:
         possible_types = (OperationTypes.BUY, )
         constraints = (
             Q(type__in=possible_types, payment__lt=0,
-              instrument__isnull=False, quantity__ge=1,
+              instrument__isnull=False, quantity__gte=1,
               dividend_tax=0, dividend_tax_date__isnull=True) & ~Q(_id='-1')
         )
 
@@ -76,7 +76,7 @@ class OperationConstraints:
         possible_types = (OperationTypes.SELL, )
         constraints = (
             Q(type__in=possible_types, payment__gt=0,
-              instrument__isnull=False, quantity__ge=1,
+              instrument__isnull=False, quantity__gte=1,
               dividend_tax=0, dividend_tax_date__isnull=True) & ~Q(_id='-1')
         )
 
@@ -85,7 +85,7 @@ class OperationConstraints:
         constraints = (
             Q(type__in=possible_types, is_margin_call=False, payment__gt=0,
               instrument__isnull=False, quantity=0, commission=0,
-              dividend_tax__le=0) & ~Q(_id='-1')
+              dividend_tax__lte=0) & ~Q(_id='-1')
         )
 
     class ServiceCommissionOperation:

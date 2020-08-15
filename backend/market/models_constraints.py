@@ -28,7 +28,7 @@ class InstrumentTypeConstraints:
         possible_types = (InstrumentTypeTypes.STOCK, )
         constraints = (
             Q(type=InstrumentTypeTypes.STOCK, iso_code='', abbreviation='',
-              lot__ge=1, currency__isnull=False) & ~Q(isin='')
+              lot__gte=1, currency__isnull=False) & ~Q(isin='')
         )
 
     ALL_INSTRUMENT_TYPES = (InstrumentType, CurrencyInstrument, StockInstrument)

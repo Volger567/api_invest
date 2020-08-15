@@ -23,6 +23,7 @@ class InstrumentType(models.Model):
     figi = models.CharField(verbose_name='FIGI', max_length=32, primary_key=True)
     name = models.CharField(verbose_name='Название', max_length=200)
     ticker = models.CharField(verbose_name='Ticker', max_length=16, unique=True)
+    type = models.CharField(verbose_name='Тип', max_length=30, choices=Types.choices)
 
     # Для валют
     iso_code = models.CharField(verbose_name='Код', max_length=3, default='')
@@ -34,6 +35,9 @@ class InstrumentType(models.Model):
     lot = models.PositiveIntegerField(verbose_name='шт/лот', default=0)
     currency = models.ForeignKey('operations.Currency', verbose_name='Валюта', on_delete=models.CASCADE, null=True)
 
+    def __str__(self):
+        return str(self.name)
+
 
 class CurrencyInstrument(InstrumentType):
     """ Валюты, которые можно купить на бирже """
@@ -42,9 +46,6 @@ class CurrencyInstrument(InstrumentType):
         verbose_name_plural = 'Валюты'
         proxy = True
 
-    def __str__(self):
-        return str(self.name)
-
 
 class StockInstrument(InstrumentType):
     """ Ценная акция на рынке """
@@ -52,9 +53,6 @@ class StockInstrument(InstrumentType):
         verbose_name = 'Акция'
         verbose_name_plural = 'Акции'
         proxy = True
-
-    def __str__(self):
-        return str(self.name)
 
 
 class DealQuerySet(models.QuerySet):
