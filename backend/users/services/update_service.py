@@ -42,7 +42,7 @@ class Updater:
         :param token: токен от Tinkoff API, если None, будет использоваться tinkoff_profile
         :param tinkoff_profile: профиль Tinkoff API, если None, будет использоваться token
         """
-        logger.info('Инициализация OperationsHandler')
+        logger.info('Инициализация Updater')
         if token is None and tinkoff_profile is None:
             raise ValueError('Надо передать token или tinkoff_profile')
         if token:
@@ -309,12 +309,12 @@ class Updater:
         (
             investment_account_model.objects
             .get(id=self.investment_account_id).currency_assets
-            .exclude(currency__iso_code__in=[c['currency'] for c in currency_actives]).delete()
+            .exclude(currency__in=[c['currency'] for c in currency_actives]).delete()
         )
         for currency in currency_actives:
             obj, created = currency_asset_model.objects.get_or_create(
-                investment_account=self,
-                currency=CurrencyInstrument.objects.get(iso_code__iexact=currency['currency']),
+                investment_account_id=self.investment_account_id,
+                currency_id=currency['currency'],
                 defaults={
                     'value': currency['balance']
                 }

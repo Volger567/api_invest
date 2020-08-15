@@ -65,6 +65,7 @@ class ProxyInheritanceManager(models.Manager):
     def create(self, *args, **kwargs):
         if _get_is_abstract_by_proxy_model(self.model):
             raise ValueError('Класс является абстрактным, его экземпляр нельзя сохранить')
+        kwargs['type'] = _get_possible_types_by_proxy_model(self.model)[0]
         return super().create(*args, **kwargs)
 
 

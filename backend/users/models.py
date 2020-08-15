@@ -9,6 +9,7 @@ from django.db.models import Sum, Case, When, Q, F, ExpressionWrapper, Avg
 from django.db.models.functions import Coalesce
 from django.db.models.signals import post_save
 from django.dispatch import receiver
+from django.utils import timezone
 
 from core import settings
 from core.utils import ProxyQ
@@ -88,22 +89,24 @@ class InvestmentAccount(models.Model):
         # XXX
         return 0
 
-    def update_portfolio(self, now):
+    def update_portfolio(self, now=None):
         """ Обновление всего портфеля.
             Включает в себя обновление операций, сделок, валютных активов
         :param now: Текущий момент времени, до которого будут обновляться операции
         """
         logger.info(f'Обновление портфеля "{self}"')
+        if now is None:
+            now = timezone.now()
         update_frequency = datetime.timedelta(minutes=float(os.getenv('PROJECT_OPERATIONS_UPDATE_FREQUENCY', 1)))
         try:
             if now - self.sync_at > update_frequency:
                 from_datetime = self.sync_at - datetime.timedelta(hours=6)
-                to_datetime = datetime.datetime.now(tz=pytz.timezone(settings.TIME_ZONE))
+                to_datetime = now
                 updater = Updater(from_datetime, to_datetime, self.pk, token=self.token)
                 updater.update_currency_assets()
                 updater.update_operations()
                 updater.update_deals()
-                self.sync_at = now
+                self.sync_at = to_datetime
                 self.save()
                 logger.info('Обновление завершено')
             else:
@@ -170,7 +173,7 @@ class CurrencyAsset(models.Model):
 
     investment_account = models.ForeignKey(
         InvestmentAccount, verbose_name='Инвестиционный счет', on_delete=models.CASCADE, related_name='currency_assets')
-    currency = models.ForeignKey('market.CurrencyInstrument', verbose_name='Валюта', on_delete=models.PROTECT)
+    currency = models.ForeignKey('operations.Currency', verbose_name='Валюта', on_delete=models.PROTECT)
     value = models.DecimalField(verbose_name='Количество', max_digits=20, decimal_places=4, default=0)
 
 
@@ -191,7 +194,7 @@ def investment_account_post_save(**kwargs):
         )
 
         # Загружаем все операции из Тинькофф
-        instance.update_operations()
+        instance.update_portfolio(timezone.now())
 
         # Высчитывается капитал создателя счета
         # Складываются все пополнения на счет, из них вычитаются выводы со счета и комиссия сервиса

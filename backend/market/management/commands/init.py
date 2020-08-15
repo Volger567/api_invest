@@ -4,7 +4,7 @@ import os
 from django.contrib.auth import get_user_model
 from django.core.management import BaseCommand
 
-from market.models import StockInstrument
+from market.models import StockInstrument, CurrencyInstrument
 from operations.models import Currency
 from tinkoff_api import TinkoffProfile
 
@@ -64,13 +64,26 @@ class Command(BaseCommand):
             superuser.save()
             logger.info(f'Супер-пользователь "{superuser.username}" создан')
 
-        logger.info('Получаем список ценных бумаг')
+        logger.info('Получаем список ценных бумаг и валют')
         token = os.getenv('tinkoff_api_production_token') or os.getenv('tinkoff_api_sandbox_token')
         with TinkoffProfile(token) as tp:
             stocks = tp.market_stocks()
+            currencies_instrument = tp.market_currencies()
+        for instrument in currencies_instrument['payload']['instruments']:
+            logger.info(f'Валюта: {instrument}')
+            CurrencyInstrument.objects.update_or_create(
+                figi=instrument['figi'],
+                defaults={
+                    'ticker': instrument['ticker'],
+                    'min_price_increment': instrument['minPriceIncrement'],
+                    'lot': instrument['lot'],
+                    'currency_id': instrument['currency'],
+                    'name': instrument['name'],
+                }
+            )
+        logger.info('Список валют обновлен')
 
         # FIXME: оптимизировать
-        currency_by_iso_code = Currency.objects.in_bulk()
         if options['with_update']:
             for stock in stocks['payload']['instruments']:
                 StockInstrument.objects.update_or_create(
@@ -80,7 +93,7 @@ class Command(BaseCommand):
                         'isin': stock['isin'],
                         'min_price_increment': stock.get('minPriceIncrement'),
                         'lot': stock['lot'],
-                        'currency': currency_by_iso_code[stock['currency']],
+                        'currency_id': stock['currency'],
                         'name': stock['name']
                     }
                 )
@@ -95,8 +108,8 @@ class Command(BaseCommand):
                         'isin': stock['isin'],
                         'min_price_increment': stock.get('minPriceIncrement', 0),
                         'lot': stock['lot'],
-                        'currency': currency_by_iso_code[stock['currency']],
+                        'currency_id': stock['currency'],
                         'name': stock['name']
                     }))
             StockInstrument.objects.bulk_create(result)
-        logger.info('Список бумаг получен и добавлен в БД')
+        logger.info('Список ценных бумаг получен и добавлен в БД')

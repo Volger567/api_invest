@@ -1,3 +1,4 @@
+from django.core.validators import MinValueValidator
 from django.db import models
 from django.db.models import Sum, F, Q, Case, When
 from django.db.models.functions import Coalesce
@@ -24,19 +25,21 @@ class InstrumentType(models.Model):
     name = models.CharField(verbose_name='Название', max_length=200)
     ticker = models.CharField(verbose_name='Ticker', max_length=16, unique=True)
     type = models.CharField(verbose_name='Тип', max_length=30, choices=Types.choices)
-
-    # Для валют
-    iso_code = models.CharField(verbose_name='Код', max_length=3, default='')
-    abbreviation = models.CharField(verbose_name='Знак', max_length=16, default='')
+    min_price_increment = models.DecimalField(
+        verbose_name='Шаг цены', validators=[MinValueValidator(0)],
+        max_digits=10, decimal_places=4, default=0
+    )
+    lot = models.PositiveIntegerField(verbose_name='шт/лот')
+    currency = models.ForeignKey('operations.Currency', verbose_name='Валюта', on_delete=models.CASCADE)
 
     # Для ценных бумаг
     isin = models.CharField(verbose_name='ISIN', max_length=32, default='')
-    min_price_increment = models.DecimalField(verbose_name='Шаг цены', max_digits=10, decimal_places=4, default=0)
-    lot = models.PositiveIntegerField(verbose_name='шт/лот', default=0)
-    currency = models.ForeignKey('operations.Currency', verbose_name='Валюта', on_delete=models.CASCADE, null=True)
 
     def __str__(self):
-        return str(self.name)
+        return f'{self.name}({self.pk})'
+
+    def __repr__(self):
+        return f'<{str(self)}>'
 
 
 class CurrencyInstrument(InstrumentType):

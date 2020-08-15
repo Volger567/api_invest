@@ -20,15 +20,13 @@ class InstrumentTypeConstraints:
     class CurrencyInstrument:
         possible_types = (InstrumentTypeTypes.CURRENCY, )
         constraints = (
-            Q(type=possible_types, isin='', min_price_increment=0, lot=0) &
-            ~Q(iso_code='') & ~Q(abbreviation='')
+            Q(type__in=possible_types, lot__gte=1, isin='')
         )
 
     class StockInstrument:
         possible_types = (InstrumentTypeTypes.STOCK, )
         constraints = (
-            Q(type=InstrumentTypeTypes.STOCK, iso_code='', abbreviation='',
-              lot__gte=1, currency__isnull=False) & ~Q(isin='')
+            Q(type__in=possible_types, lot__gte=1) & ~Q(isin='')
         )
 
     ALL_INSTRUMENT_TYPES = (InstrumentType, CurrencyInstrument, StockInstrument)

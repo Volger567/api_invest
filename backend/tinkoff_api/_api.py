@@ -134,6 +134,12 @@ class TinkoffProfile:
 
     @only_authorized
     @generate_url
+    def market_currencies(self, url: str):
+        logger.info('Получение от Tinkoff API: market/currencies/')
+        return self.response_to_json(self._session.get(url))
+
+    @only_authorized
+    @generate_url
     def market_stocks(self, url: str):
         return self.response_to_json(self._session.get(url))
 
@@ -166,6 +172,7 @@ class TinkoffProfile:
         :param to_datetime: конец промежутка
         :return: True или raise InvalidArgumentError
         """
+        logger.info(f'Проверка валидности двух дат: {from_datetime} и {to_datetime}')
         if not (isinstance(from_datetime, dt.datetime) and isinstance(to_datetime, dt.datetime)):
             raise InvalidArgumentError('Аргументы from_datetime и to_datetime должны быть типа datetime')
         if from_datetime >= to_datetime:
