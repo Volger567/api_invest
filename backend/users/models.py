@@ -57,7 +57,7 @@ class InvestmentAccount(models.Model):
     broker_account_id = models.CharField(verbose_name='ID инвестиционного счета', max_length=50)
     sync_at = models.DateTimeField(
         verbose_name='Время последней синхронизации',
-        default=datetime.datetime(1900, 1, 1, tzinfo=pytz.timezone(settings.TIME_ZONE))
+        default=datetime.datetime(1990, 1, 1, tzinfo=pytz.timezone('UTC'))
     )
 
     @property
@@ -97,17 +97,23 @@ class InvestmentAccount(models.Model):
         logger.info(f'Обновление портфеля "{self}"')
         if now is None:
             now = timezone.now()
+        logger.info(f'{now=}')
         update_frequency = datetime.timedelta(minutes=float(os.getenv('PROJECT_OPERATIONS_UPDATE_FREQUENCY', 1)))
+        logger.info(f'{self.sync_at=}')
         try:
             if now - self.sync_at > update_frequency:
                 from_datetime = self.sync_at - datetime.timedelta(hours=6)
+                logger.info(f'{from_datetime=}')
                 to_datetime = now
-                updater = Updater(from_datetime, to_datetime, self.pk, token=self.token)
+                logger.info(f'{to_datetime=}')
+                updater = Updater(from_datetime, to_datetime, self.id, token=self.token)
                 updater.update_currency_assets()
                 updater.update_operations()
                 updater.update_deals()
+                logger.info(f'{to_datetime=}')
                 self.sync_at = to_datetime
                 self.save()
+                logger.info(f'{self.sync_at=}')
                 logger.info('Обновление завершено')
             else:
                 logger.info('Портфель обновлялся недавно')
@@ -194,7 +200,7 @@ def investment_account_post_save(**kwargs):
         )
 
         # Загружаем все операции из Тинькофф
-        instance.update_portfolio(timezone.now())
+        instance.update_portfolio()
 
         # Высчитывается капитал создателя счета
         # Складываются все пополнения на счет, из них вычитаются выводы со счета и комиссия сервиса

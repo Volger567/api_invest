@@ -65,10 +65,6 @@ class Updater:
         # Операции, после первичной обработки
         self.processed_primary_operations = {}
         # Все валюты и торговые инструменты
-        self.currencies = {
-            iso_code: pk
-            for iso_code, pk in CurrencyInstrument.objects.values_list('pk', 'iso_code')
-        }
         self.instruments = InstrumentType.objects.all()
 
     @property
@@ -85,7 +81,7 @@ class Updater:
         # Получаем список операций в диапазоне
         self.operations = self.tinkoff_profile.operations(
             self.from_datetime, self.to_datetime
-        )['payload']['operations']
+        )['payload']['operations'][::-1]
         logger.info('Операции получены')
         self._is_processed_primary_operations = False
         self._is_processed_secondary_operations = False
@@ -128,7 +124,8 @@ class Updater:
                 'date': self.timezone.localize(dateutil.parser.isoparse(operation['date']).replace(tzinfo=None)),
                 'is_margin_call': operation['isMarginCall'],
                 'payment': operation['payment'],
-                'currency_id': self.currencies.get(operation['currency'])
+                'currency_id': operation['currency'],
+                '_id': operation['id']
             }
             if operation_type in primary_operation_type:
                 base_operation_kwargs['type'] = operation_type
@@ -164,14 +161,14 @@ class Updater:
                         'quantity': transaction['quantity'],
                         'price': transaction['price']
                     })
+                # Иногда Tinkoff не считает payment, вычисляем из trades
                 if base_operation_kwargs['payment'] == 0:
-                    base_operation_kwargs['payment'] = sum(i['quantity'] * i['price'] for i in operation['trades'])
+                    base_operation_kwargs['payment'] = sum(i['quantity'] * -i['price'] for i in operation['trades'])
                     logger.warning(f'payment не указан, вычислили из trades: {base_operation_kwargs["payment"]}')
                 obj = model(
                     **base_operation_kwargs,
                     quantity=operation['quantity'],
-                    commission=commission,
-                    _id=operation['id']
+                    commission=commission
                 )
                 final_operations[model].append(obj)
                 self.operations.remove(operation)
@@ -181,9 +178,10 @@ class Updater:
             else:
                 logger.info('Операция не является первичной')
 
-        for model, bulk_create in final_operations:
+        for model, bulk_create in final_operations.items():
+            logger.info(f'Создаем операции модели {model.__name__} через bulk_create')
             model.objects.bulk_create(bulk_create, ignore_conflicts=True)
-
+            logger.info(f'Операции модели {model.__name__} созданы через bulk_create')
         # Обработанные операции
         self.processed_primary_operations = final_operations
         # Первичные операции обработаны
@@ -253,8 +251,8 @@ class Updater:
         logger.info('Обновление сделок')
         operations = (
             Operation.objects
-            .filter(PurchaseOperation, SaleOperation, DividendOperation)
-            .filter(deal__isnull=True, investment_account_id=self.investment_account_id)
+            .filter(proxy_instance_of=(PurchaseOperation, SaleOperation, DividendOperation),
+                    deal__isnull=True, investment_account_id=self.investment_account_id)
             .order_by('date')
         )
 
@@ -273,7 +271,7 @@ class Updater:
                 for co_owner in co_owners:
                     logger.info(f'Добавление доли операции для {co_owner}')
                     bulk_create_share.append(
-                        Share(operation=operation, co_owner=co_owner, value=co_owner.default_share)
+                        Share(operation=operation, co_owner_id=co_owner.pk, value=co_owner.default_share)
                     )
                 deal, created = (
                     Deal.objects.opened()
@@ -286,7 +284,7 @@ class Updater:
                     logger.info('Сделка существовала')
                 deal.operations.add(operation)
                 recalculation_income_deals.add(deal)
-            elif isinstance(operation, DividendOperation):
+            elif is_proxy_instance(operation, DividendOperation):
                 logger.info('Дивиденды')
                 (
                     Deal.objects

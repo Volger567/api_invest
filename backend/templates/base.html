@@ -1,4 +1,5 @@
 {% load static %}
+{% load tz %}
 
 <!DOCTYPE html>
 <html lang="en">
@@ -85,7 +86,7 @@
         {{ currency.value|floatformat:2 }} {{ currency.currency.abbreviation }}<br>
       {% endfor %}
       {% if request.user.default_investment_account %}
-        Последнее обновление: {{ request.user.default_investment_account.sync_at|date:"G:i:s" }}
+        Последнее обновление: {{ request.user.default_investment_account.sync_at|localtime|date:"H:i:s" }}
       {% endif %}
       </span>
     </div>

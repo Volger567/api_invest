@@ -74,8 +74,8 @@ class DealsView(LoginRequiredMixin, UpdateInvestmentAccountMixin, TemplateView):
             queryset.opened()
             .annotate(
                 earliest_operation_date=Min('operations__date'),
-                figi_name=F('figi__name'),
-                figi_figi=F('figi__figi'),
+                figi_name=F('instrument__name'),
+                figi_figi=F('instrument__figi'),
                 abbreviation=Subquery(
                     Operation.objects.filter(deal=OuterRef('pk')).values('currency__abbreviation')[:1]
                 )
@@ -109,5 +109,5 @@ class DealsView(LoginRequiredMixin, UpdateInvestmentAccountMixin, TemplateView):
                 ),
                 profit=Sum('operations__payment')+Sum('operations__commission'))
             .order_by('-latest_operation_date')
-        ).select_related('figi').distinct()
+        ).select_related('instrument').distinct()
         return context

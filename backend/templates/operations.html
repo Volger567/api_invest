@@ -1,6 +1,7 @@
 {% extends 'base.html' %}
 {% load static %}
 {% load custom_filters %}
+{% load tz %}
 
 {% block link %}
   <link rel="stylesheet" href="{% static 'css/operations.css' %}">
@@ -15,8 +16,8 @@
     <ul class="operations list-group list-group-flush m-auto">
       {% if operations %}
         {% for operation in operations %}
-          {% ifchanged operation.date.day operation.date.month operation.date.year %}
-            <span class="operation-new-day">{{ operation.date|date }}</span>
+          {% ifchanged operation.date|localtime|date:"d-m-Y" %}
+            <span class="operation-new-day">{{ operation.date|localtime|date }}</span>
           {% endifchanged %}
           <li class="operation-item list-group-item text-left {% if operation.payment < 0 %} expense {% else %} income {% endif %}">
             <!-- Доли -->
@@ -30,7 +31,7 @@
               </div>
             {% endif %}
             <div class="float-left">
-              <span class="operation-item-date float-left">{{ operation.date|date:"G:i:s" }}</span>
+              <span class="operation-item-date float-left">{{ operation.date|localtime|date:"H:i:s" }}</span>
               <br>
               <span class="operation-item-type float-left">
                 {{ operation.friendly_type_format }}
@@ -56,9 +57,9 @@
                 </div>
               {% endif %}
               <!-- Ценная бумага -->
-              {% if operation.figi %}
+              {% if operation.instrument %}
                 <div class="operation-item-figi">
-                  <a href="{% url 'operations' %}?figi={{ operation.figi.figi }}">{{ operation.figi.name }}</a>
+                  <a href="{% url 'operations' %}?figi={{ operation.instrument.figi }}">{{ operation.instrument.name }}</a>
                 </div>
               {% endif %}
             </div>

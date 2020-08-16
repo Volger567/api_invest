@@ -59,8 +59,8 @@ class StockInstrument(InstrumentType):
 
 
 class DealQuerySet(models.QuerySet):
-    _sale_filter = ProxyQ(proxy_instance_of=SaleOperation)
-    _purchase_filter = ProxyQ(proxy_instance_of=PurchaseOperation)
+    _sale_filter = ProxyQ(operations__proxy_instance_of=SaleOperation)
+    _purchase_filter = ProxyQ(operations__proxy_instance_of=PurchaseOperation)
 
     def _with_quantity_annotation_by_operation_type(self):
         return self.annotate(
@@ -146,6 +146,9 @@ class Deal(models.Model):
             deal_income.value = smart_investors_set[deal_income.co_owner].capital
             deal_income_bulk_update.append(deal_income)
         DealIncome.objects.bulk_update(deal_income_bulk_update, fields=['value'])
+
+    def __str__(self):
+        return f'Deal({self.instrument.name})'
 
 
 class DealIncome(models.Model):

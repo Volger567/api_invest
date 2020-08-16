@@ -70,8 +70,8 @@ class Operation(models.Model):
         # Получение модели операции по типу операции (в строковом эквиваленте)
         return {
             Operation.Types.SELL: SaleOperation,
-            Operation.Types.BUY: CardPurchaseOperation,
-            Operation.Types.BUY_CARD: InvestmentAccountPurchaseOperation,
+            Operation.Types.BUY: InvestmentAccountPurchaseOperation,
+            Operation.Types.BUY_CARD: CardPurchaseOperation,
             Operation.Types.DIVIDEND: DividendOperation,
             Operation.Types.PAY_IN: PayInOperation,
             Operation.Types.PAY_OUT: PayOutOperation,
@@ -80,6 +80,9 @@ class Operation(models.Model):
             Operation.Types.TAX: TaxOperation,
             Operation.Types.TAX_BACK: TaxBackOperation
         }.get(operation_type)
+
+    def friendly_type_format(self):
+        return dict(Operation.Types.choices)[self.type]
 
     def __str__(self):
         return f'{self.get_operation_model_by_type(self.type)}({self.pk}): {self.date}'
