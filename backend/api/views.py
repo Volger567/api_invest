@@ -89,6 +89,7 @@ class InvestmentAccountView(PermissionsByActionMixin, ModelViewSet):
         'partial_update': RequestUserPermissions.IsCreatorOfSpecificInvestmentAccount,
         'destroy': RequestUserPermissions.IsCreatorOfSpecificInvestmentAccount
     }
+    queryset = InvestmentAccount.objects.all()
 
     def filter_queryset(self, queryset):
         """ Список ИС, владельцем которых является пользователь """

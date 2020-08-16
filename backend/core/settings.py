@@ -102,7 +102,7 @@ LOGGING = {
     'disable_existing_loggers': False,
     'formatters': {
         'verbose': {
-            'format': '[%(asctime)s.%(msecs)03d] - %(message)s      ::%(levelname)s:%(name)s',
+            'format': '[%(asctime)s.%(msecs)03d]::%(levelname)s:%(name)s - %(message)s',
             'datefmt': '%d/%b/%Y %H:%M:%S'
         },
         'simple': {

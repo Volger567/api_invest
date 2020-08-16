@@ -55,7 +55,7 @@ class Operation(models.Model):
     )
     _id = models.CharField(verbose_name='ID', max_length=32, default='-1')
     deal = models.ForeignKey(
-        'market.Deal', verbose_name='Сделка', on_delete=models.PROTECT, null=True, related_name='operations'
+        'market.Deal', verbose_name='Сделка', on_delete=models.CASCADE, null=True, related_name='operations'
     )
 
     # Для налогов на дивиденды
