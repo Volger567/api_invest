@@ -66,7 +66,7 @@ class Operation(models.Model):
     dividend_tax_date = models.DateTimeField('Дата налога', null=True)
 
     @staticmethod
-    def get_operation_model_by_type(operation_type):
+    def get_operation_model_by_type(operation_type, default=None):
         # Получение модели операции по типу операции (в строковом эквиваленте)
         return {
             Operation.Types.SELL: SaleOperation,
@@ -79,13 +79,13 @@ class Operation(models.Model):
             Operation.Types.MARGIN_COMMISSION: MarginCommissionOperation,
             Operation.Types.TAX: TaxOperation,
             Operation.Types.TAX_BACK: TaxBackOperation
-        }.get(operation_type)
+        }.get(operation_type, default)
 
     def friendly_type_format(self):
         return dict(Operation.Types.choices)[self.type]
 
     def __str__(self):
-        return f'{self.get_operation_model_by_type(self.type)}({self.pk}): {self.date}'
+        return f'{self.get_operation_model_by_type(self.type).__name__}({self.pk}): {self.date}'
 
     def __repr__(self):
         return f'<{str(self)}>'

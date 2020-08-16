@@ -184,6 +184,7 @@ class TinkoffProfile:
         if not (callable(getattr(from_datetime, 'isoformat', None)) and
                 callable(getattr(to_datetime, 'isoformat', None))):
             raise InvalidArgumentError('Аргументы from_datetime и to_datetime должны иметь метод isoformat')
+        logger.info('Даты валидны')
 
     @only_authorized
     @generate_url

@@ -131,6 +131,8 @@ class OperationConstraints:
     ALL_CONSTRAINTS = [
         models.UniqueConstraint(fields=('investment_account', 'type', 'date'), name='unique_%(class)s'),
         models.UniqueConstraint(fields=('_id',), condition=~Q(_id=''), name='unique_id_$(class)s'),
+        models.UniqueConstraint(fields=('investment_account', 'type', 'instrument', 'dividend_tax_date'),
+                                condition=Q(dividend_tax_date__isnull=False), name='unique_div_tax_date'),
         models.CheckConstraint(
             name='%(class)s_restrict_property_set_by_type',
             check=ALL_PROXY_CONSTRAINTS

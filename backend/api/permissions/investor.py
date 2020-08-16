@@ -12,7 +12,7 @@ class RequestUserPermissions:
     class HasDefaultInvestmentAccount(IsAuthenticated):
         """ Установлен ли у пользователя ИС по умолчанию """
         def has_permission(self, request, view):
-            return request.user.default_investment_account is not None
+            return super().has_permission(request, view) and request.user.default_investment_account is not None
 
     # noinspection PyUnresolvedReferences
     class IsCreatorOfDefaultInvestmentAccount(IsAuthenticated):
@@ -20,8 +20,9 @@ class RequestUserPermissions:
             который установлен у него по умолчанию
         """
         def has_permission(self, request, view):
-            investment_account: 'InvestmentAccount' = request.user.default_investment_account
-            return investment_account and request.user == investment_account.creator
+            if super().has_permission(request, view):
+                investment_account: 'InvestmentAccount' = request.user.default_investment_account
+                return investment_account and request.user == investment_account.creator
 
     # noinspection PyUnresolvedReferences
     class IsCreatorOfSpecificInvestmentAccount(IsAuthenticated):

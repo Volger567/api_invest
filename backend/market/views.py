@@ -4,7 +4,6 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import ObjectDoesNotExist
 from django.db.models import Max, Sum, Min, F, Subquery, OuterRef
 from django.db.models.functions import Coalesce
-from django.utils import timezone
 from django.views.generic import TemplateView, ListView
 
 from market.models import StockInstrument, Deal, InstrumentType
@@ -60,7 +59,6 @@ class DealsView(LoginRequiredMixin, UpdateInvestmentAccountMixin, TemplateView):
     template_name = 'deals.html'
 
     def get_context_data(self, **kwargs):
-        # TODO: дату нормально выводить
         figi = self.request.GET.get('figi')
         try:
             figi_object = StockInstrument.objects.get(figi=figi)
@@ -74,8 +72,8 @@ class DealsView(LoginRequiredMixin, UpdateInvestmentAccountMixin, TemplateView):
             queryset.opened()
             .annotate(
                 earliest_operation_date=Min('operations__date'),
-                figi_name=F('instrument__name'),
-                figi_figi=F('instrument__figi'),
+                instrument_name=F('instrument__name'),
+                instrument_figi=F('instrument__figi'),
                 abbreviation=Subquery(
                     Operation.objects.filter(deal=OuterRef('pk')).values('currency__abbreviation')[:1]
                 )
@@ -88,7 +86,7 @@ class DealsView(LoginRequiredMixin, UpdateInvestmentAccountMixin, TemplateView):
                 portfolio = tp.portfolio()['payload']['positions']
                 portfolio = {i['figi']: i for i in portfolio}
             for deal in opened_deals:
-                figi_figi = deal['figi_figi']
+                figi_figi = deal['instrument_figi']
                 asset = portfolio[figi_figi]
                 price = asset['averagePositionPrice']['value'] * asset['balance']
                 expected_price = price + asset['expectedYield']['value']

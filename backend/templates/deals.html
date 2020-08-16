@@ -1,5 +1,6 @@
 {% extends 'base.html' %}
 {% load static %}
+{% load tz %}
 {% load custom_filters %}
 {% load custom_tags %}
 
@@ -22,12 +23,14 @@
           <li class="deal-item list-group-item text-left {% if deal.expected_profit > 0 %} income {% else %} expense {% endif %}">
             <div class="float-left">
                 <span class="deal-item-is-closed float-left">
-                  {{ deal.earliest_operation_date|date:"d/m/y H:i" }}
+                  {{ deal.earliest_operation_date|localtime|date:"d/m/y H:i" }}
                 </span>
                 <br>
-                <span class="deal-item-lots float-left">
-                  Лотов осталось: {{ deal.lots_left }}
-                </span>
+                {% if deal.lots_left %}
+                  <span class="deal-item-lots float-left">
+                    Лотов осталось: {{ deal.lots_left }}
+                  </span>
+                {% endif %}
               </div>
               <div class="float-right text-right">
                 <!-- Профит -->
@@ -41,7 +44,7 @@
                 <!-- Ценная бумага -->
                 <br>
                 <div class="deal-item-figi">
-                  <a href="{% url 'deals' %}?figi={{ deal.figi_figi }}">{{ deal.figi_name }}</a>
+                  <a href="{% url 'deals' %}?figi={{ deal.instrument_figi }}">{{ deal.instrument_name }}</a>
                 </div>
               </div>
           </li>
@@ -57,15 +60,9 @@
           <li class="deal-item list-group-item text-left {% if deal.profit < 0 %} expense {% else %} income {% endif %}">
             <div class="float-left">
               <span class="deal-item-is-closed float-left">
-                {{ deal.earliest_operation_date|date:"d/m/y H:i" }} - {{ deal.latest_operation_date|date:"d/m/y H:i" }}<br>
+                {{ deal.earliest_operation_date|localtime|date:"d/m/y H:i" }} - {{ deal.latest_operation_date|localtime|date:"d/m/y H:i" }}<br>
               </span>
               <br>
-              <span class="operation-item-type float-left">
-                {{ operation.friendly_type_format }}
-                {% if operation.quantity %}
-                  (Лотов: {{ operation.quantity|div:operation.figi.lot }})
-                {% endif %}
-              </span>
             </div>
             <div class="float-right text-right">
               <!-- Профит -->
@@ -79,7 +76,7 @@
               <!-- Ценная бумага -->
               <br>
               <div class="deal-item-figi">
-                <a href="{% url 'deals' %}?figi={{ deal.figi.figi }}">{{ deal.figi.name }}</a>
+                <a href="{% url 'deals' %}?figi={{ deal.instrument.figi }}">{{ deal.instrument.name }}</a>
               </div>
             </div>
           </li>

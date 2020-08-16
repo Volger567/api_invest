@@ -54,7 +54,7 @@ class Updater:
         self.tinkoff_profile.check_date_range(from_datetime, to_datetime)
         self.from_datetime = from_datetime
         self.to_datetime = to_datetime
-        self.timezone = from_datetime.tzinfo
+        self.timezone = to_datetime.tzinfo
         self.investment_account_id = investment_account_id
         self.operations = []
         self.transactions = collections.defaultdict(list)
@@ -77,12 +77,10 @@ class Updater:
 
     def get_operations_from_tinkoff_api(self) -> None:
         """ Получение списка операций в заданном временном диапазоне """
-        logger.info(f'Получение операций от {self.from_datetime.isoformat()} до {self.to_datetime.isoformat()}')
         # Получаем список операций в диапазоне
         self.operations = self.tinkoff_profile.operations(
             self.from_datetime, self.to_datetime
         )['payload']['operations'][::-1]
-        logger.info('Операции получены')
         self._is_processed_primary_operations = False
         self._is_processed_secondary_operations = False
 
@@ -121,7 +119,7 @@ class Updater:
             # У каждой операции есть эти свойства, поэтому вынесем их
             base_operation_kwargs = {
                 'investment_account_id': self.investment_account_id,
-                'date': self.timezone.localize(dateutil.parser.isoparse(operation['date']).replace(tzinfo=None)),
+                'date': dateutil.parser.isoparse(operation['date']).astimezone(self.timezone),
                 'is_margin_call': operation['isMarginCall'],
                 'payment': operation['payment'],
                 'currency_id': operation['currency'],
@@ -134,8 +132,8 @@ class Updater:
                     self.model_by_instrument_type[operation['instrumentType']].objects.get(figi=operation['figi'])
                 )
                 logger.info(f'У операции указан инструмент ({base_operation_kwargs["instrument"]})')
-            model = Operation.get_operation_model_by_type(operation_type)
-            logger.info(f'Модель операции: {model}')
+            model = Operation.get_operation_model_by_type(operation_type, default=Operation)
+            logger.info(f'Модель операции: {model.__name__}')
 
             # Операции, которым достаточно значений из base_operation_kwargs
             if operation_type in (Operation.Types.PAY_IN, Operation.Types.PAY_OUT, Operation.Types.DIVIDEND,
@@ -218,20 +216,34 @@ class Updater:
         Transaction.objects.bulk_create(bulk_create_transactions, ignore_conflicts=True)
         logger.info('Транзакции обновлены')
 
+        logger.info('Добавляем вторичные операции')
         for operation in self.operations.copy():
             logger.info(f'Операция: {operation}')
             operation_type = operation['operationType']
-            operation_date = self.timezone.localize(dateutil.parser.isoparse(operation['date']).replace(tzinfo=None))
+            operation_date = dateutil.parser.isoparse(operation['date']).astimezone(self.timezone)
 
             # Для налога на дивиденды находим последнюю ценную бумагу без налога по figi
             if operation_type == Operation.Types.TAX_DIVIDEND:
                 logger.info('Операция "Налог на дивиденды"')
-                (
+                dividend_tax_exists = (
                     DividendOperation.objects
-                    .filter(instrument__figi=operation['figi'], date__lte=operation_date, tax_date__isnull=True)
-                    .order_by('-date')[0].update(tax=operation['payment'], tax_date=operation_date)
+                    .filter(investment_account_id=self.investment_account_id,
+                            instrument__figi=operation['figi'], dividend_tax_date=operation_date)
+                    .exists()
                 )
+                if not dividend_tax_exists:
+                    dividend_obj = (
+                        DividendOperation.objects
+                        .filter(investment_account_id=self.investment_account_id,
+                                instrument__figi=operation['figi'], date__lte=operation_date,
+                                dividend_tax_date__isnull=True)
+                        .order_by('-date')[0]
+                    )
+                    dividend_obj.dividend_tax = operation['payment']
+                    dividend_obj.dividend_tax_date = operation_date
+                    dividend_obj.save(update_fields=('dividend_tax', 'dividend_tax_date'))
                 self.operations.remove(operation)
+        logger.info('Вторичные операции добавлены')
         if self.operations:
             logger.warning(f'Оставшиеся операции после вторичной обработки: {self.operations}')
         else:
@@ -285,13 +297,15 @@ class Updater:
                 deal.operations.add(operation)
                 recalculation_income_deals.add(deal)
             elif is_proxy_instance(operation, DividendOperation):
-                logger.info('Дивиденды')
-                (
+                deal = (
                     Deal.objects
                     .filter(instrument=operation.instrument, investment_account_id=self.investment_account_id)
                     .annotate(opened_date=Min('operations__date'))
-                    .filter(opened_date__lte=operation.date).last('opened_date').operations.add(operation)
+                    .filter(opened_date__lte=operation.date)
+                    .latest('opened_date')
                 )
+                deal.operations.add(operation)
+                recalculation_income_deals.add(deal)
         Share.objects.bulk_create(bulk_create_share, ignore_conflicts=True)
         for deal in recalculation_income_deals:
             logger.info(f'Пересчет прибыли у {deal}')

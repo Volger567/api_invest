@@ -38,7 +38,7 @@ def _get_possible_types_by_proxy_model(proxy_model):
 
 
 def is_proxy_instance(_model, proxy_instances):
-    if hasattr(proxy_instances, '__iter__'):
+    if isinstance(proxy_instances, (tuple, list)):
         for proxy_instance in proxy_instances:
             if _model.type in _get_possible_types_by_proxy_model(proxy_instance):
                 return proxy_instance
@@ -48,9 +48,8 @@ def is_proxy_instance(_model, proxy_instances):
 
 class ProxyInheritanceQuerySet(models.QuerySet):
     def _filter_or_exclude(self, negate, *args, **kwargs):
-        if 'proxy_instance_of' in kwargs or 'proxy_instance_of__exact' in kwargs:
-            args = args + (ProxyQ(**kwargs), )
-            kwargs = {}
+        args = args + (ProxyQ(**kwargs), )
+        kwargs = {}
         return super()._filter_or_exclude(negate, *args, **kwargs)
 
 

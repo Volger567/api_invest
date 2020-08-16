@@ -11,7 +11,6 @@ from django.db.models.signals import post_save
 from django.dispatch import receiver
 from django.utils import timezone
 
-from core import settings
 from core.utils import ProxyQ
 from market.models import Deal, DealIncome
 from operations.models import PurchaseOperation, SaleOperation, PayOperation, ServiceCommissionOperation
@@ -97,28 +96,22 @@ class InvestmentAccount(models.Model):
         logger.info(f'Обновление портфеля "{self}"')
         if now is None:
             now = timezone.now()
-        logger.info(f'{now=}')
         update_frequency = datetime.timedelta(minutes=float(os.getenv('PROJECT_OPERATIONS_UPDATE_FREQUENCY', 1)))
-        logger.info(f'{self.sync_at=}')
         try:
             if now - self.sync_at > update_frequency:
                 from_datetime = self.sync_at - datetime.timedelta(hours=6)
-                logger.info(f'{from_datetime=}')
                 to_datetime = now
-                logger.info(f'{to_datetime=}')
                 updater = Updater(from_datetime, to_datetime, self.id, token=self.token)
                 updater.update_currency_assets()
                 updater.update_operations()
                 updater.update_deals()
-                logger.info(f'{to_datetime=}')
                 self.sync_at = to_datetime
                 self.save()
-                logger.info(f'{self.sync_at=}')
-                logger.info('Обновление завершено')
+                logger.info('Обновление портфеля завершено')
             else:
                 logger.info('Портфель обновлялся недавно')
         except InvalidTokenError:
-            logger.warning('Обновление не удалось, токен невалидный')
+            logger.warning('Обновление портфеля не удалось, токен невалидный')
 
     def __str__(self):
         return f'{self.name} ({self.creator})'

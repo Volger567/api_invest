@@ -1,13 +1,14 @@
 """ Расчет доходов каждого инвестора за определенную сделку
 """
-
+import operator
 from decimal import Decimal
 from typing import Union, Dict, NoReturn
 
-# Как правило, это либо username, либо id, либо CoOwner
 from core.utils import is_proxy_instance
 from operations.models import DividendOperation, SaleOperation, PurchaseOperation
 
+
+# Как правило, это либо username, либо id, либо CoOwner
 T_INVESTOR = Union[str, int, 'users.CoOwner']
 T_OPERATIONS = Union[PurchaseOperation, SaleOperation, DividendOperation]
 T_OPERATIONS_QUERYSET = Union['django.db.models.QuerySet']
@@ -61,7 +62,7 @@ class SmartInvestorSet:
 
     def total_stock_quantity(self):
         """ Общее количество акций на руках инвесторов """
-        return sum(self, lambda x: x.stock_quantity)
+        return sum(map(operator.attrgetter('stock_quantity'), self.investors.values()))
 
     def __iter__(self):
         return iter(self.investors.values())

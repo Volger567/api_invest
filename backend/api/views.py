@@ -48,12 +48,15 @@ class InvestorView(PermissionsByActionMixin, ModelViewSet):
     search_fields = ['^username']
 
     def filter_queryset(self, queryset):
-        """ При получении списка пользователей, пользователь, который
+        """ При получении списка пользователей c GET параметром username, пользователь, который
             сделал запрос и суперпользователь будут отсутствовать в выдаче
         """
         queryset = super().filter_queryset(queryset)
+        exclude_usernames = [os.getenv('PROJECT_SUPERUSER_USERNAME')]
+        if self.action == 'retrieve' and self.request.GET.get('username') is None:
+            exclude_usernames.append(self.request.user.username)
         return queryset.exclude(
-            username__in=(os.getenv('PROJECT_SUPERUSER_USERNAME'), self.request.user.username)
+            username__in=exclude_usernames
         )
 
     def get_serializer(self, *args, **kwargs):

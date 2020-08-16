@@ -126,14 +126,12 @@ class Deal(models.Model):
         # Получаем все операции покупки/продажи и операции получения дивидендов
         operations = (
             self.operations
-            .filter(proxy_instance_of=(PurchaseOperation, SaleOperation))
+            .filter(proxy_instance_of=(PurchaseOperation, SaleOperation, DividendOperation))
             .prefetch_related('shares')
         )
-        dividends = self.operations.filter(proxy_instance_of=DividendOperation).all()
         # Для расчета дохода каждого инвестора от сделки используется этот класс
         smart_investors_set = SmartInvestorSet()
         smart_investors_set.add_operations(operations)
-        smart_investors_set.add_operations(dividends)
 
         DealIncome.objects.exclude(co_owner__in=smart_investors_set.investors).delete()
         DealIncome.objects.bulk_create(
