@@ -3,6 +3,7 @@ import logging
 import os
 
 import pytz
+import requests
 from django.contrib.auth.models import AbstractUser, Group
 from django.db import models
 from django.db.models import Sum, Case, When, Q, F, ExpressionWrapper, Avg
@@ -12,8 +13,9 @@ from django.dispatch import receiver
 from django.utils import timezone
 
 from core.utils import ProxyQ
-from market.models import Deal, DealIncome
-from operations.models import PurchaseOperation, SaleOperation, PayOperation, ServiceCommissionOperation
+from market.models import Deal, DealIncome, CurrencyInstrument
+from operations.models import PurchaseOperation, SaleOperation, PayOperation, ServiceCommissionOperation, \
+    DividendOperation
 from tinkoff_api.exceptions import InvalidTokenError
 from users.services.update_service import Updater
 
@@ -85,8 +87,38 @@ class InvestmentAccount(models.Model):
     @property
     def prop_total_capital(self):
         """ Расчет общего капитала для всего ИС """
-        # XXX
-        return 0
+        total_capital = (
+            self.operations
+            .filter(ProxyQ(proxy_instance_of=(PayOperation, ServiceCommissionOperation)) |
+                    ProxyQ(proxy_instance_of=(PurchaseOperation, SaleOperation),
+                           instrument__proxy_instance_of=CurrencyInstrument))
+            .values('currency').order_by()
+            .annotate(total_capital=Sum('payment')+Sum('commission'), abbreviation=F('currency__abbreviation'))
+        )
+        total_capital = {i['currency']: i for i in total_capital}
+        currency_purchases = self.operations.filter(
+            proxy_instance_of=PurchaseOperation, instrument__proxy_instance_of=CurrencyInstrument
+        ).values('instrument__ticker').annotate(s=Sum('quantity'))
+
+        currency_sales = self.operations.filter(
+            proxy_instance_of=SaleOperation, instrument__proxy_instance_of=CurrencyInstrument
+        ).values('instrument__ticker').annotate(s=Sum('quantity'))
+        for i in currency_purchases:
+            if 'USD' in i['instrument__ticker']:
+                total_capital['USD']['total_capital'] += i['s']
+            elif 'EUR' in i['instrument__ticker']:
+                total_capital['EUR']['total_capital'] += i['s']
+            else:
+                logger.error(f'Покупка неизвестной валюты: {i}')
+
+        for i in currency_sales:
+            if 'USD' in i['instrument__ticker']:
+                total_capital['USD']['total_capital'] -= i['s']
+            elif 'EUR' in i['instrument__ticker']:
+                total_capital['EUR']['total_capital'] -= i['s']
+            else:
+                logger.error(f'Продажа неизвестной валюты: {i}')
+        return total_capital
 
     def update_portfolio(self, now=None):
         """ Обновление всего портфеля.
@@ -112,6 +144,8 @@ class InvestmentAccount(models.Model):
                 logger.info('Портфель обновлялся недавно')
         except InvalidTokenError:
             logger.warning('Обновление портфеля не удалось, токен невалидный')
+        except requests.exceptions.ConnectionError:
+            logger.warning('Обновление портфеля не удалось, сбой при подключении к Tinkoff API')
 
     def __str__(self):
         return f'{self.name} ({self.creator})'

@@ -1,3 +1,4 @@
+{% load custom_tags %}
 {% load static %}
 {% load tz %}
 
@@ -83,10 +84,12 @@
       {{ request.user.default_investment_account|default:'Инвестиционный счет не выбран' }}
       <br>
       {% for currency in currency_assets %}
-        {{ currency.value|floatformat:2 }} {{ currency.currency.abbreviation }}<br>
+        {% if currency.value %}
+          {{ currency.value|floatformat:2 }} {{ currency.currency.abbreviation }}<br>
+        {% endif %}
       {% endfor %}
       {% if request.user.default_investment_account %}
-        Последнее обновление: {{ request.user.default_investment_account.sync_at|localtime|date:"H:i:s" }}
+        Последнее обновление: {% sync_time_ago %}
       {% endif %}
       </span>
     </div>

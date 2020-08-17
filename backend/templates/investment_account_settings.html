@@ -10,7 +10,34 @@
   <div class="text-center">
   {% if request.user.default_investment_account and request.user.default_investment_account.creator == request.user %}
     <h3>Счет: {{ request.user.default_investment_account.name }}({{ request.user.default_investment_account.broker_account_id }})</h3>
-    <h5>Общий капитал: {{ total_capital|floatformat:2 }}</h5>
+    <!-- Общая информация о счете -->
+    <table class="table general-information-table m-auto w-75">
+      <caption style="caption-side: top">
+        Общая информация о счете
+      </caption>
+      <thead>
+        <tr class="table-active text-center">
+          <th scope="col">Валюта</th>
+          <th scope="col">Общий капитал</th>
+          <th scope="col">...</th>
+          <th scope="col">...</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for capital in total_capital.values %}
+        <tr class="text-center">
+          <th class="general-information-currency">
+            {{ capital.currency }}
+          </th>
+          <th class="general-information-general-capital">
+            {{ capital.total_capital|floatformat:2 }} {{ capital.abbreviation }}
+          </th>
+          <th class="">...</th>
+          <th class="">...</th>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
     <input type="hidden" value="{{ total_capital }}" id="total-capital">
     <input type="hidden" value="{{ total_income }}" id="total-income">
     <input type="hidden" value="{{ request.user.default_investment_account.pk }}" id="investment_account_pk">

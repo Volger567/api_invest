@@ -55,7 +55,7 @@ class InvestmentAccountSettings(LoginRequiredMixin, UpdateInvestmentAccountMixin
     model = CoOwner
     context_object_name = 'co_owners'
 
-    def get_queryset(self):
+    def filter_queryset(self):
         """ Получение списка совладельцев """
         if self.investment_account:
             return (
@@ -63,7 +63,7 @@ class InvestmentAccountSettings(LoginRequiredMixin, UpdateInvestmentAccountMixin
                 .with_is_creator_annotations()
                 .annotate(
                     limit=F('capital') +
-                    Sum('deal_income__value', filter=Q(investment_account=self.investment_account)))
+                    Sum('deal_income_set__value', filter=Q(investment_account=self.investment_account)))
                 .order_by('-is_creator', 'investor__username')
             )
         return CoOwner.objects.none()
@@ -73,7 +73,7 @@ class InvestmentAccountSettings(LoginRequiredMixin, UpdateInvestmentAccountMixin
         # FIXME: сделать для всех валют
         if self.investment_account:
             context['total_capital'] = self.request.user.default_investment_account.prop_total_capital
-            context['total_income'] = (
-                (context['currency_assets'].get(currency__iso_code='RUB').value - context['total_capital'])
-            )
+            # context['total_income'] = (
+            #     context['currency_assets'].get(currency__iso_code='RUB').value - context['total_capital']
+            # )
         return context

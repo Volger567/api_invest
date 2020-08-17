@@ -94,3 +94,19 @@ class ProxyQ(Q):
                     types |= set(_get_possible_types_by_proxy_model(proxy_instance))
                 kwargs[kwarg.replace('proxy_instance_of', 'type__in')] = types
         super().__init__(*args, _connector=_connector, _negated=_negated, **kwargs)
+
+
+def word2declension(num: int, nominative: str, genitive: str, plural: str):
+    """
+        Склоняет слово в зависимости в соответствии с переданным числом
+    :param num: число
+    :param nominative: слово в именительном падеже
+    :param genitive: слово в родительный падеже
+    :param plural: слово в множественном числе
+    :return: склоненное слово
+    """
+    if num % 10 == 1 and num % 100 != 11:
+        return nominative
+    if num % 10 in (2, 3, 4) and num % 100 not in (12, 13, 14):
+        return genitive
+    return plural

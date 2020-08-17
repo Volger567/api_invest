@@ -4,7 +4,7 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import ObjectDoesNotExist
 from django.db.models import Max, Sum, Min, F, Subquery, OuterRef
 from django.db.models.functions import Coalesce
-from django.views.generic import TemplateView, ListView
+from django.views.generic import TemplateView, ListView, RedirectView
 
 from market.models import StockInstrument, Deal, InstrumentType
 from operations.models import Operation
@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 class UpdateInvestmentAccountMixin:
     def get(self, *args, **kwargs):
-        self.investment_account = self.request.user.default_investment_account
+        self.investment_account = getattr(self.request.user, 'default_investment_account', None)
         if self.investment_account:
             self.investment_account.update_portfolio()
         return super().get(*args, **kwargs)
@@ -26,6 +26,10 @@ class UpdateInvestmentAccountMixin:
             context['currency_assets'] = \
                 self.investment_account.currency_assets.all().select_related('currency').distinct()
         return context
+
+
+class IndexView(LoginRequiredMixin, RedirectView):
+    pattern_name = 'operations'
 
 
 class OperationsView(LoginRequiredMixin, UpdateInvestmentAccountMixin, ListView):
