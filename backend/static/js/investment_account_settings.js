@@ -23,7 +23,7 @@ $(document).ready(function() {
         success: function(data) {
           investorsElement.text('')
           data.forEach(function(user){
-            investorsElement.append(`<button class="btn btn-primary m-1 add-co-owner-btn">${user}</button>`)
+            investorsElement.append(`<button class="btn btn-primary m-1 add-co-owner-btn">${user.username}</button>`)
           })
         },
       })

@@ -53,7 +53,7 @@ class InvestorView(PermissionsByActionMixin, ModelViewSet):
         """
         queryset = super().filter_queryset(queryset)
         exclude_usernames = [os.getenv('PROJECT_SUPERUSER_USERNAME')]
-        if self.action == 'retrieve' and self.request.GET.get('username') is None:
+        if self.action == 'list' and self.request.GET.get('search') is not None:
             exclude_usernames.append(self.request.user.username)
         return queryset.exclude(
             username__in=exclude_usernames

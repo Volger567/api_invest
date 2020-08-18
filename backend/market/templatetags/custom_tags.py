@@ -44,10 +44,10 @@ def sync_time_ago(context):
     seconds = delta - hours * 3600 - minutes * 60
     res = []
     if hours:
-        res.append(f'{str(hours).zfill(2)} + {word2declension(hours, "час", "часа", "часов")}')
+        res.append(f'{hours} {word2declension(hours, "час", "часа", "часов")}')
     if minutes:
-        res.append(f'{str(minutes).zfill(2)} + {word2declension(minutes, "минута", "минуты", "минут")}')
-    if seconds:
-        res.append(f'{str(seconds).zfill(2)} + {word2declension(seconds, "секунда", "секунды", "секунд")}')
+        res.append(f'{minutes} {word2declension(minutes, "минуту", "минуты", "минут")}')
+    if seconds or not (hours or minutes):
+        res.append(f'{seconds} {word2declension(seconds, "секунду", "секунды", "секунд")}')
     res.append('назад')
     return ' '.join(res)
