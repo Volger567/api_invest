@@ -1,7 +1,8 @@
 from django import template
-from django.db.models import Sum
+from django.db import models
+from django.db.models import Sum, ExpressionWrapper
 
-from operations.models import Operation
+from operations.models import SaleOperation, DividendOperation, PurchaseOperation
 
 register = template.Library()
 
@@ -34,19 +35,18 @@ def divide(value, arg):
 # FIXME: Отпимизировать запрос и считать на бэке
 @register.filter
 def percent_profit_format(operations):
-    tmp_income = (
+    income = (
         operations
-        .filter(type__in=(Operation.Types.SELL, Operation.Types.DIVIDEND))
-        .aggregate(income=Sum('payment'), expense=Sum('commission'))
-    )
-    income = tmp_income['income']
-    expense = tmp_income['expense']
-    tmp_expense = (
+        .filter(proxy_instance_of=(SaleOperation, DividendOperation))
+        .aggregate(income=ExpressionWrapper(
+            Sum('payment') + Sum('commission') + Sum('dividend_tax'), output_field=models.DecimalField())
+        )
+    )['income']
+    expense = (
         operations
-        .filter(type__in=(Operation.Types.BUY, Operation.Types.BUY_CARD, Operation.Types.TAX_DIVIDEND))
-        .aggregate(expense=Sum('payment'), commission=Sum('commission'))
-    )
-    expense += tmp_expense['expense'] + tmp_expense['commission']
+        .filter(proxy_instance_of=PurchaseOperation)
+        .aggregate(expense=Sum('payment') + Sum('commission'))
+    )['expense']
     expense = abs(expense)
     if income > expense:
         percent_profit = ((income/expense)-1)*100

@@ -187,11 +187,25 @@ class CoOwner(models.Model):
         Investor, verbose_name='Инвестор', on_delete=models.CASCADE, related_name='co_owned_investment_accounts')
     investment_account = models.ForeignKey(
         InvestmentAccount, verbose_name='Инвестиционный счет', on_delete=models.CASCADE, related_name='co_owners')
-    capital = models.DecimalField(verbose_name='Капитал', max_digits=20, decimal_places=4, default=0)
-    default_share = models.DecimalField(verbose_name='Доля по умолчанию', default=0, max_digits=9, decimal_places=8)
 
     def __str__(self):
         return f'{self.investor}, {self.investment_account.name}'
+
+
+class Capital(models.Model):
+    """ Капитал определенного совладельца"""
+    class Meta:
+        verbose_name = 'Капитал совладельца'
+        verbose_name_plural = 'Капиталы совладельцев'
+        constraints = [
+            models.UniqueConstraint(fields=('co_owner', 'currency'), name='unique_capital')
+        ]
+    co_owner = models.ForeignKey(
+        CoOwner, verbose_name='Совладелец', on_delete=models.CASCADE, related_name='capital_set'
+    )
+    currency = models.ForeignKey('operations.Currency', verbose_name='Валюта', on_delete=models.CASCADE)
+    value = models.DecimalField(verbose_name='Капитал', max_digits=20, decimal_places=4, default=0)
+    default_share = models.DecimalField(verbose_name='Доля по умолчанию', default=0, max_digits=9, decimal_places=8)
 
 
 class CurrencyAsset(models.Model):
