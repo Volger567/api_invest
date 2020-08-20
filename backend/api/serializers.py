@@ -5,10 +5,11 @@ from django.db.models import Sum
 from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
 
+from core.utils import ExcludeFieldsMixin
 from operations.models import Share
 from tinkoff_api import TinkoffProfile
 from tinkoff_api.exceptions import InvalidTokenError
-from users.models import InvestmentAccount, Investor, CoOwner
+from users.models import InvestmentAccount, Investor, CoOwner, Capital
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +38,7 @@ class ExtendedInvestorSerializer(serializers.ModelSerializer):
 
 
 class SimplifiedInvestorSerializer(serializers.ModelSerializer):
-    """ Упощенный сериализатор для инвестора.
+    """ Упрощенный сериализатор для инвестора.
         При получении информации другими инвесторами,
         используется он
     """
@@ -81,35 +82,51 @@ class InvestmentAccountSerializer(serializers.ModelSerializer):
         return super().create(validated_data)
 
 
+class CapitalSerializer(ExcludeFieldsMixin, serializers.ModelSerializer):
+    """ Сериализатор капитала совладельца """
+    class Meta:
+        model = Capital
+        fields = ('id', 'co_owner', 'currency', 'value', 'default_share')
+
+    default_share = serializers.DecimalField(max_digits=9, decimal_places=6, min_value=0, max_value=100)
+
+    def validate_default_share(self, value):
+        """ Если доля по умолчанию > 1, то делится на 100 (выражение в процентах).
+            Таким образом, при передаче 40 - будет переведено в 0.4
+        """
+        if self.context.get('total_default_share') is not None:
+            return value/self.context['total_default_share']
+        elif 1 < value < 100:
+            return value / 100
+        return value
+
+
 class CoOwnerSerializer(serializers.ModelSerializer):
     """ Сериализатор для совладельцев """
     class Meta:
         model = CoOwner
-        fields = ('id', 'investor', 'investment_account', 'capital', 'default_share', 'is_creator')
+        fields = ('id', 'investor', 'investment_account', 'capital', 'is_creator')
 
-    default_share = serializers.DecimalField(max_digits=9, decimal_places=6, min_value=0, max_value=100)
+    capital = CapitalSerializer(many=True, exclude_fields=('co_owner', ))
     investor = serializers.PrimaryKeyRelatedField(
         many=True, queryset=Investor.objects.exclude(username=os.getenv('PROJECT_SUPERUSER_USERNAME')),
     )
     is_creator = serializers.BooleanField(read_only=True)
 
     def validate_investor(self, investor):
+        """ Совладельцем можно назначить любого инвестора, кроме себя"""
         if self.context['request'].user == investor:
             raise ValidationError('Вы не можете назначить себя совладельцем, вы уже им являетесь')
         return investor
 
     def validate_investment_account(self, investment_account):
+        """ Добавление совладельцов возможно только для тех ИС,
+            для которых request.user является владельцем
+        """
         if self.context['request'].user == investment_account.creator:
             return investment_account
         else:
             raise ValidationError('Вы не можете добавить совладельца к ИС, владельцем которого не являетесь')
-
-    def validate_default_share(self, value):
-        if self.context.get('total_default_share') is not None:
-            return value/self.context['total_default_share']
-        elif 1 < value < 100:
-            return value / 100
-        return value
 
 
 class ShareSerializer(serializers.ModelSerializer):
@@ -119,6 +136,7 @@ class ShareSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
     def validate_value(self, value):
+        """ Сумма всех долей операции должна быть не больше 1 """
         if self.instance is not None:
             total_share = self.instance.operation.shares.aggregate(s=Sum('value'))['s']
             if total_share - self.instance.value + value > 1:

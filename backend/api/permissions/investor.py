@@ -1,49 +1,68 @@
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, BasePermission
 
 
 class RequestUserPermissions:
     """ Разрешения для пользователя, который выполняет запрос """
-    # noinspection PyUnresolvedReferences
-    class IsSpecificInvestor(IsAuthenticated):
-        """ Является ли пользователь конкретным инвестором """
+
+    class CanEditInvestor(IsAuthenticated):
+        """ Может ли пользователь редактировать информацию об инвесторе """
         def has_object_permission(self, request, view, obj: 'Investor'):
             return request.user == obj
 
-    class HasDefaultInvestmentAccount(IsAuthenticated):
+    class HasDefaultInvestmentAccount(BasePermission):
         """ Установлен ли у пользователя ИС по умолчанию """
         def has_permission(self, request, view):
-            return super().has_permission(request, view) and request.user.default_investment_account is not None
+            return (
+                IsAuthenticated().has_permission(request, view) and
+                request.user.default_investment_account is not None
+            )
 
-    # noinspection PyUnresolvedReferences
-    class IsCreatorOfDefaultInvestmentAccount(IsAuthenticated):
-        """ Является ли пользователь владельцем ИС,
+    class CanEditDefaultInvestmentAccount(BasePermission):
+        """ Может ли пользователь редактировать информацию об ИС,
             который установлен у него по умолчанию
         """
         def has_permission(self, request, view):
-            if super().has_permission(request, view):
+            if IsAuthenticated().has_permission(request, view):
                 investment_account: 'InvestmentAccount' = request.user.default_investment_account
                 return investment_account and request.user == investment_account.creator
+            return False
 
-    # noinspection PyUnresolvedReferences
-    class IsCreatorOfSpecificInvestmentAccount(IsAuthenticated):
+    class CanEditInvestmentAccount(IsAuthenticated):
         """ Является ли пользователь владельцем конкретного ИС """
         def has_object_permission(self, request, view, obj: 'InvestmentAccount'):
             return request.user == obj.creator
 
-    # noinspection PyUnresolvedReferences
-    class IsCoOwnerOfSpecificInvestmentAccount(IsAuthenticated):
+    class CanRetrieveInvestmentAccount(IsAuthenticated):
         """ Является ли пользователь совладельцем конкретного ИС """
         def has_object_permission(self, request, view, obj: 'InvestmentAccount'):
-            return request.user.co_owned_investment_accounts.filter(investment_account=obj).exists()
+            return request.user in obj.investors or request.user == obj.creator
 
-    # noinspection PyUnresolvedReferences
-    class IsSpecificCoOwner(IsAuthenticated):
-        """ Является ли пользователь конкретным совладельцем """
+    class CanRetrieveCoOwner(IsAuthenticated):
+        """ Может ли пользователь получить информацию о совладельце/совладельцах """
         def has_object_permission(self, request, view, obj: 'CoOwner'):
-            return request.user == obj.investor
+            return request.user in (obj.investor, obj.investment_account.creator)
 
-    # noinspection PyUnresolvedReferences
-    class IsInvestmentAccountCreatorOfCoOwner(IsAuthenticated):
-        """ Является ли пользователь создателем ИС конкретного совладельца """
+    class CanEditCoOwner(IsAuthenticated):
+        """ Может ли пользовать редактировать информацию о совладельце """
         def has_object_permission(self, request, view, obj: 'CoOwner'):
             return request.user == obj.investment_account.creator
+
+    class CanRetrieveCapital(IsAuthenticated):
+        """ Может ли пользователь получать информацию о капитале """
+        def has_object_permission(self, request, view, obj: 'Capital'):
+            return request.user in obj.co_owner.investment_account.investors
+
+    class CanEditCapital(IsAuthenticated):
+        """ Может ли пользователь редактировать информацию о капитале """
+        def has_object_permission(self, request, view, obj: 'Capital'):
+            return request.user == obj.co_owner.investment_account.creator
+
+    class CanRetrieveShare(IsAuthenticated):
+        """ Может ли пользователь получить информацию о доле в операции """
+        def has_object_permission(self, request, view, obj: 'Share'):
+            return request.user in obj.operation.investment_account.investors
+
+    class CanEditShare(IsAuthenticated):
+        """ Может ли пользователь редактировать информацию о доле в операции """
+        def has_object_permission(self, request, view, obj):
+            return request.user == obj.operation.investment_account.creator

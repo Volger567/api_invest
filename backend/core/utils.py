@@ -1,3 +1,5 @@
+from typing import Dict
+
 from django.db import models
 from django.db.models import Q
 
@@ -110,3 +112,29 @@ def word2declension(num: int, nominative: str, genitive: str, plural: str):
     if num % 10 in (2, 3, 4) and num % 100 not in (12, 13, 14):
         return genitive
     return plural
+
+
+class ExcludeFieldsMixin:
+    """ Добавляет в сериализатор возможность передавать exclude_fields,
+        чтобы исключать поля из результата
+    """
+    def __init__(self, *args, **kwargs):
+        self.exclude_fields = kwargs.pop('exclude_fields', ())
+        super().__init__(*args, **kwargs)
+
+    def get_field_names(self, *args, **kwargs):
+        fields = list(super().get_field_names(*args, **kwargs))
+        for field in self.exclude_fields:
+            fields.remove(field)
+        return fields
+
+
+class PermissionsByActionMixin:
+    """ Получение permissions в зависимости от action """
+    permissions_by_action: Dict[str, 'BasePermission'] = {}
+
+    def get_permissions(self):
+        permissions = self.permissions_by_action.get(self.action, self.permission_classes)
+        if not isinstance(permissions, (tuple, list)):
+            permissions = [permissions]
+        return [permission() for permission in permissions]

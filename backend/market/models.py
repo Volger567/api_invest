@@ -119,6 +119,7 @@ class Deal(models.Model):
         'users.InvestmentAccount', verbose_name='Инвестиционный счет', on_delete=models.CASCADE,
         related_name='deals'
     )
+    co_owners = models.ManyToManyField('users.CoOwner', through='DealIncome')
 
     def recalculation_income(self):
         """ Перерасчет дохода со сделки для каждого участника """
@@ -158,7 +159,9 @@ class DealIncome(models.Model):
             models.UniqueConstraint(fields=('deal', 'co_owner'), name='unique_deal_co-owner')
         ]
 
-    deal = models.ForeignKey(Deal, verbose_name='Сделка', on_delete=models.CASCADE)
+    deal = models.ForeignKey(
+        Deal, verbose_name='Сделка', on_delete=models.CASCADE, related_name='income_set'
+    )
     co_owner = models.ForeignKey(
         'users.CoOwner', verbose_name='Совладелец', on_delete=models.CASCADE,
         related_name='deal_income_set'

@@ -64,6 +64,7 @@ class Operation(models.Model):
         validators=[MaxValueValidator(0, 'Налог должен быть отрицательным числом или 0')]
     )
     dividend_tax_date = models.DateTimeField('Дата налога', null=True)
+    co_owners = models.ManyToManyField('users.CoOwner', through='Share')
 
     @staticmethod
     def get_operation_model_by_type(operation_type, default=None):

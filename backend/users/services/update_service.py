@@ -272,8 +272,8 @@ class Updater:
         recalculation_income_deals = set()
         # Список всех совладельцев счета
         co_owners = (
-            investment_account_model(id=self.investment_account_id).co_owners.all()
-            .values_list('pk', 'default_share', named=True)
+            investment_account_model(id=self.investment_account_id).co_owners
+            .prefetch_related('capital').all()
         )
         logger.info(f'Список совладельцев: {co_owners}')
         bulk_create_share = []
@@ -282,8 +282,9 @@ class Updater:
             if is_proxy_instance(operation, (PurchaseOperation, SaleOperation)):
                 for co_owner in co_owners:
                     logger.info(f'Добавление доли операции для {co_owner}')
+                    default_share = co_owner.capital.get(currency=operation.currency).default_share
                     bulk_create_share.append(
-                        Share(operation=operation, co_owner_id=co_owner.pk, value=co_owner.default_share)
+                        Share(operation=operation, co_owner_id=co_owner.pk, value=default_share)
                     )
                 deal, created = (
                     Deal.objects.opened()

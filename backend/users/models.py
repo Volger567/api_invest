@@ -1,6 +1,7 @@
 import datetime
 import logging
 import os
+from typing import Dict
 
 import pytz
 import requests
@@ -15,7 +16,7 @@ from django.utils import timezone
 from core.utils import ProxyQ
 from market.models import Deal, DealIncome, CurrencyInstrument
 from operations.models import PurchaseOperation, SaleOperation, PayOperation, ServiceCommissionOperation, \
-    DividendOperation
+    DividendOperation, Currency
 from tinkoff_api.exceptions import InvalidTokenError
 from users.services.update_service import Updater
 
@@ -60,6 +61,8 @@ class InvestmentAccount(models.Model):
         verbose_name='Время последней синхронизации',
         default=datetime.datetime(1990, 1, 1, tzinfo=pytz.timezone('UTC'))
     )
+    investors = models.ManyToManyField(Investor, through='CoOwner')
+    currencies = models.ManyToManyField('operations.Currency', through='CurrencyAsset')
 
     @property
     def prop_total_income(self):
@@ -85,7 +88,7 @@ class InvestmentAccount(models.Model):
         return total_income_of_closed_deals + total_income_of_opened_deals
 
     @property
-    def prop_total_capital(self):
+    def prop_total_capital(self) -> Dict[str, 'decimal.Decimal']:
         """ Расчет общего капитала для всего ИС """
         total_capital = (
             self.operations
@@ -187,6 +190,7 @@ class CoOwner(models.Model):
         Investor, verbose_name='Инвестор', on_delete=models.CASCADE, related_name='co_owned_investment_accounts')
     investment_account = models.ForeignKey(
         InvestmentAccount, verbose_name='Инвестиционный счет', on_delete=models.CASCADE, related_name='co_owners')
+    currencies = models.ManyToManyField('operations.Currency', through='Capital')
 
     def __str__(self):
         return f'{self.investor}, {self.investment_account.name}'
@@ -197,13 +201,16 @@ class Capital(models.Model):
     class Meta:
         verbose_name = 'Капитал совладельца'
         verbose_name_plural = 'Капиталы совладельцев'
+        ordering = ('currency', )
         constraints = [
             models.UniqueConstraint(fields=('co_owner', 'currency'), name='unique_capital')
         ]
     co_owner = models.ForeignKey(
-        CoOwner, verbose_name='Совладелец', on_delete=models.CASCADE, related_name='capital_set'
+        CoOwner, verbose_name='Совладелец', on_delete=models.CASCADE, related_name='capital'
     )
-    currency = models.ForeignKey('operations.Currency', verbose_name='Валюта', on_delete=models.CASCADE)
+    currency = models.ForeignKey(
+        'operations.Currency', verbose_name='Валюта', on_delete=models.CASCADE, related_name='capital'
+    )
     value = models.DecimalField(verbose_name='Капитал', max_digits=20, decimal_places=4, default=0)
     default_share = models.DecimalField(verbose_name='Доля по умолчанию', default=0, max_digits=9, decimal_places=8)
 
@@ -220,7 +227,9 @@ class CurrencyAsset(models.Model):
 
     investment_account = models.ForeignKey(
         InvestmentAccount, verbose_name='Инвестиционный счет', on_delete=models.CASCADE, related_name='currency_assets')
-    currency = models.ForeignKey('operations.Currency', verbose_name='Валюта', on_delete=models.PROTECT)
+    currency = models.ForeignKey(
+        'operations.Currency', verbose_name='Валюта', on_delete=models.PROTECT, related_name='assets'
+    )
     value = models.DecimalField(verbose_name='Количество', max_digits=20, decimal_places=4, default=0)
 
 
@@ -235,20 +244,27 @@ def investment_account_post_save(**kwargs):
         creator.save(update_fields=('default_investment_account', ))
 
         # Создатель счета становится одним из совладельцев счета
-        co_owner = CoOwner.objects.create(
-            investor=creator, investment_account=instance,
-            default_share=1, capital=0
-        )
+        co_owner = CoOwner.objects.create(investor=creator, investment_account=instance)
 
         # Загружаем все операции из Тинькофф
         instance.update_portfolio()
+        total_capital = instance.prop_total_capital
+        co_owner_capital = co_owner.capital.select_related('currency').all()
+        bulk_updates = []
+        for co_owner_capital_item in co_owner_capital:
+            bulk_updates.append(co_owner_capital_item)
+            bulk_updates[-1].value = total_capital.get(co_owner_capital_item.currency.iso_code, 0)
+        Capital.objects.bulk_update(bulk_updates, fields=('value', ))
 
-        # Высчитывается капитал создателя счета
-        # Складываются все пополнения на счет, из них вычитаются выводы со счета и комиссия сервиса
-        creator_capital = (
-            instance.operations
-            .filter(proxy_instance_of=(PayOperation, ServiceCommissionOperation))
-            .aggregate(s=Coalesce(Sum('payment'), 0))['s']
-        )
-        co_owner.capital = creator_capital
-        co_owner.save(update_fields=['capital'])
+
+@receiver(post_save, sender=CoOwner)
+def co_owner_post_save(**kwargs):
+    if kwargs.get('created'):
+        # После создания совладельца добавляем ему капитал по всем валютам
+        instance = kwargs['instance']
+        default_share = int(instance.investor == instance.investment_account.creator)
+        bulk_create = [
+            Capital(co_owner=instance, currency=currency, default_share=default_share)
+            for currency in Currency.objects.all()
+        ]
+        Capital.objects.bulk_create(bulk_create, ignore_conflicts=True)
