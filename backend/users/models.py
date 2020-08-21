@@ -1,3 +1,4 @@
+import collections
 import datetime
 import logging
 import os
@@ -16,7 +17,7 @@ from django.utils import timezone
 from core.utils import ProxyQ
 from market.models import Deal, DealIncome, CurrencyInstrument
 from operations.models import PurchaseOperation, SaleOperation, PayOperation, ServiceCommissionOperation, \
-    DividendOperation, Currency
+    DividendOperation, Currency, Operation, Share
 from tinkoff_api.exceptions import InvalidTokenError
 from users.services.update_service import Updater
 
@@ -45,10 +46,6 @@ class InvestmentAccount(models.Model):
             models.UniqueConstraint(fields=('name', 'creator'), name='unique_inv_name'),
             models.UniqueConstraint(fields=('creator', 'token'), name='unique_token')
         ]
-
-    class CapitalSharingPrinciples(models.TextChoices):
-        ABSOLUTE = 'abs', 'Абсолютный'
-        RELATIVE = 'rel', 'Относительный'
 
     name = models.CharField(verbose_name='Название счета', max_length=256)
     creator = models.ForeignKey(
@@ -87,10 +84,14 @@ class InvestmentAccount(models.Model):
         ).aggregate(s=Sum('_income'))['s']
         return total_income_of_closed_deals + total_income_of_opened_deals
 
-    @property
-    def prop_total_capital(self) -> Dict[str, 'decimal.Decimal']:
-        """ Расчет общего капитала для всего ИС """
-        total_capital = (
+    def capital_info(self) -> Dict[str, 'decimal.Decimal']:
+        """ Расчет общего капитала для всего ИС,
+            расчет нераспределенных средств
+        """
+        # Общий капитал ИС
+        # Расчитывается как
+        # (пополнения счета + сервисная комиссия`<-отрицательная`) + покупки/продажи валюты + комиссия за операцию
+        total_capital_by_currency = (
             self.operations
             .filter(ProxyQ(proxy_instance_of=(PayOperation, ServiceCommissionOperation)) |
                     ProxyQ(proxy_instance_of=(PurchaseOperation, SaleOperation),
@@ -98,7 +99,11 @@ class InvestmentAccount(models.Model):
             .values('currency').order_by()
             .annotate(total_capital=Sum('payment')+Sum('commission'), abbreviation=F('currency__abbreviation'))
         )
-        total_capital = {i['currency']: i for i in total_capital}
+        # Для каждой валюты вычисляем общий капитал
+        capital_info = collections.defaultdict(dict)
+        for capital in total_capital_by_currency:
+            capital_info[capital['currency']]['total_capital'] = capital['total_capital']
+
         currency_purchases = self.operations.filter(
             proxy_instance_of=PurchaseOperation, instrument__proxy_instance_of=CurrencyInstrument
         ).values('instrument__ticker').annotate(s=Sum('quantity'))
@@ -106,22 +111,32 @@ class InvestmentAccount(models.Model):
         currency_sales = self.operations.filter(
             proxy_instance_of=SaleOperation, instrument__proxy_instance_of=CurrencyInstrument
         ).values('instrument__ticker').annotate(s=Sum('quantity'))
+
         for i in currency_purchases:
             if 'USD' in i['instrument__ticker']:
-                total_capital['USD']['total_capital'] += i['s']
+                capital_info['USD']['total_capital'] += i['s']
             elif 'EUR' in i['instrument__ticker']:
-                total_capital['EUR']['total_capital'] += i['s']
+                capital_info['EUR']['total_capital'] += i['s']
             else:
                 logger.error(f'Покупка неизвестной валюты: {i}')
 
         for i in currency_sales:
             if 'USD' in i['instrument__ticker']:
-                total_capital['USD']['total_capital'] -= i['s']
+                capital_info['USD']['total_capital'] -= i['s']
             elif 'EUR' in i['instrument__ticker']:
-                total_capital['EUR']['total_capital'] -= i['s']
+                capital_info['EUR']['total_capital'] -= i['s']
             else:
                 logger.error(f'Продажа неизвестной валюты: {i}')
-        return total_capital
+        distributed_capital = (
+            Capital.objects
+            .filter(co_owner__investment_account=InvestmentAccount.objects.last())
+            .values('currency').order_by().annotate(distributed_capital=Sum('value')).distinct()
+        )
+        for capital in distributed_capital:
+            if capital['currency'] in capital_info:
+                capital_info[capital['currency']]['undistributed_capital'] = \
+                    capital_info[capital['currency']]['total_capital'] - capital['distributed_capital']
+        return dict(capital_info)
 
     def update_portfolio(self, now=None):
         """ Обновление всего портфеля.
@@ -214,6 +229,9 @@ class Capital(models.Model):
     value = models.DecimalField(verbose_name='Капитал', max_digits=20, decimal_places=4, default=0)
     default_share = models.DecimalField(verbose_name='Доля по умолчанию', default=0, max_digits=9, decimal_places=8)
 
+    def __str__(self):
+        return f'{self.co_owner}::{self.currency}::{self.value}::{self.default_share}'
+
 
 class CurrencyAsset(models.Model):
     """ Валютный актив в портфеле """
@@ -232,12 +250,16 @@ class CurrencyAsset(models.Model):
     )
     value = models.DecimalField(verbose_name='Количество', max_digits=20, decimal_places=4, default=0)
 
+    def __str__(self):
+        return f'{self.investment_account}::{self.currency}: {self.value}'
+
 
 @receiver(post_save, sender=InvestmentAccount)
 def investment_account_post_save(**kwargs):
     if kwargs.get('created'):
         # Операции, которые будут выполнены после создания инвестиционного счета
         instance = kwargs['instance']
+        logger.info(f'Создан аккаунт: {instance}. Отрабатываем действия после создания')
         # У создателя, счет станет счетом по умолчанию
         creator: Investor = instance.creator
         creator.default_investment_account = instance
@@ -248,12 +270,14 @@ def investment_account_post_save(**kwargs):
 
         # Загружаем все операции из Тинькофф
         instance.update_portfolio()
-        total_capital = instance.prop_total_capital
+        total_capital = instance.capital_info()
         co_owner_capital = co_owner.capital.select_related('currency').all()
         bulk_updates = []
         for co_owner_capital_item in co_owner_capital:
-            bulk_updates.append(co_owner_capital_item)
-            bulk_updates[-1].value = total_capital.get(co_owner_capital_item.currency.iso_code, 0)
+            iso_code = co_owner_capital_item.currency.iso_code
+            if iso_code in total_capital:
+                bulk_updates.append(co_owner_capital_item)
+                bulk_updates[-1].value = total_capital[iso_code]['total_capital']
         Capital.objects.bulk_update(bulk_updates, fields=('value', ))
 
 
@@ -268,3 +292,13 @@ def co_owner_post_save(**kwargs):
             for currency in Currency.objects.all()
         ]
         Capital.objects.bulk_create(bulk_create, ignore_conflicts=True)
+        operations = (
+            Operation.objects
+            .filter(proxy_instance_of=(PurchaseOperation, SaleOperation, DividendOperation))
+            .filter(investment_account=instance.investment_account).values_list('id', 'currency')
+        )
+        bulk_create_shares = [
+            Share(operation_id=operation_id, co_owner=instance, value=default_share)
+            for operation_id, currency in operations
+        ]
+        Share.objects.bulk_create(bulk_create_shares, ignore_conflicts=True)

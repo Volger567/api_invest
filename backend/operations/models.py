@@ -15,6 +15,9 @@ class Currency(models.Model):
     abbreviation = models.CharField(verbose_name='Символ', max_length=16)
     name = models.CharField(verbose_name='Название', max_length=100, unique=True)
 
+    def __str__(self):
+        return str(self.iso_code)
+
 
 class Operation(models.Model):
     """ Базовая модель операции, все виды операций наследуются от нее """

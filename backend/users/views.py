@@ -72,8 +72,5 @@ class InvestmentAccountSettings(LoginRequiredMixin, UpdateInvestmentAccountMixin
         context = super().get_context_data(**kwargs)
         # FIXME: сделать для всех валют
         if self.investment_account:
-            context['total_capital'] = self.request.user.default_investment_account.prop_total_capital
-            # context['total_income'] = (
-            #     context['currency_assets'].get(currency__iso_code='RUB').value - context['total_capital']
-            # )
+            context['capital_info'] = self.request.user.default_investment_account.capital_info()
         return context

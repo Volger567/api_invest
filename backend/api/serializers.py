@@ -4,6 +4,8 @@ import os
 from django.db.models import Sum
 from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
+from rest_framework.serializers import raise_errors_on_nested_writes
+from rest_framework.utils import model_meta
 
 from core.utils import ExcludeFieldsMixin
 from operations.models import Share
@@ -90,6 +92,10 @@ class CapitalSerializer(ExcludeFieldsMixin, serializers.ModelSerializer):
 
     default_share = serializers.DecimalField(max_digits=9, decimal_places=6, min_value=0, max_value=100)
 
+    def __init__(self, *args, **kwargs):
+        self.is_bulk_update = kwargs.pop('bulk_update', False)
+        super().__init__(*args, **kwargs)
+
     def validate_default_share(self, value):
         """ Если доля по умолчанию > 1, то делится на 100 (выражение в процентах).
             Таким образом, при передаче 40 - будет переведено в 0.4
@@ -100,6 +106,27 @@ class CapitalSerializer(ExcludeFieldsMixin, serializers.ModelSerializer):
             return value / 100
         return value
 
+    def validate(self, attrs):
+        if self.is_bulk_update:
+            info = model_meta.get_field_info(self.instance)
+            for attr, _ in attrs.items():
+                if attr in info.relations and info.relations[attr].to_many:
+                    raise ValidationError({attr: 'Нельзя изменять поля m2m через bulk_update'})
+        return super().validate(attrs)
+
+    def update(self, instance, validated_data):
+        if self.is_bulk_update:
+            raise_errors_on_nested_writes('update', self, validated_data)
+            info = model_meta.get_field_info(instance)
+            for attr, value in validated_data.items():
+                if attr in info.relations and info.relations[attr].to_many:
+                    raise ValidationError('Нельзя изменять поля m2m через bulk_update')
+                else:
+                    setattr(instance, attr, value)
+            return instance
+        else:
+            return super().update(instance, validated_data)
+
 
 class CoOwnerSerializer(serializers.ModelSerializer):
     """ Сериализатор для совладельцев """
@@ -107,11 +134,14 @@ class CoOwnerSerializer(serializers.ModelSerializer):
         model = CoOwner
         fields = ('id', 'investor', 'investment_account', 'capital', 'is_creator')
 
-    capital = CapitalSerializer(many=True, exclude_fields=('co_owner', ))
+    capital = serializers.SerializerMethodField(read_only=True)
     investor = serializers.PrimaryKeyRelatedField(
-        many=True, queryset=Investor.objects.exclude(username=os.getenv('PROJECT_SUPERUSER_USERNAME')),
+        queryset=Investor.objects.exclude(username=os.getenv('PROJECT_SUPERUSER_USERNAME')),
     )
     is_creator = serializers.BooleanField(read_only=True)
+
+    def get_capital(self, obj):
+        return CapitalSerializer(instance=obj.capital, many=True, exclude_fields=('co_owner', )).data
 
     def validate_investor(self, investor):
         """ Совладельцем можно назначить любого инвестора, кроме себя"""

@@ -1,12 +1,16 @@
 import logging
 import os
 
+from django.db.models import F
+from rest_framework import status
+from rest_framework.decorators import action
 from rest_framework.filters import SearchFilter
+from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
 
-from core.utils import PermissionsByActionMixin
+from core.utils import PermissionsByActionMixin, CheckObjectPermissionMixin
 from operations.models import Share
-from users.models import InvestmentAccount, Investor, Capital
+from users.models import InvestmentAccount, Investor, Capital, CoOwner
 from .permissions import RequestUserPermissions
 from .serializers import InvestmentAccountSerializer, CoOwnerSerializer, \
     ShareSerializer, SimplifiedInvestorSerializer, ExtendedInvestorSerializer, CapitalSerializer
@@ -16,12 +20,12 @@ logger = logging.getLogger(__name__)
 
 class InvestorView(PermissionsByActionMixin, ModelViewSet):
     """ Инвестор """
-    queryset = Investor.objects.filter(is_active=True)
     permissions_by_action = {
         'update': RequestUserPermissions.CanEditInvestor,
         'partial_update': RequestUserPermissions.CanEditInvestor,
         'destroy': RequestUserPermissions.CanEditInvestor
     }
+    queryset = Investor.objects.filter(is_active=True)
     filter_backends = [SearchFilter]
     search_fields = ['^username']
 
@@ -82,13 +86,14 @@ class CoOwnerView(PermissionsByActionMixin, ModelViewSet):
         'partial_update': RequestUserPermissions.CanEditCoOwner,
         'destroy': RequestUserPermissions.CanEditCoOwner
     }
+    queryset = CoOwner.objects.all()
 
     def filter_queryset(self, queryset):
         queryset = super().filter_queryset(queryset)
         return queryset.filter(investment_account=self.request.user.default_investment_account)
 
 
-class CapitalView(PermissionsByActionMixin, ModelViewSet):
+class CapitalView(PermissionsByActionMixin, CheckObjectPermissionMixin, ModelViewSet):
     """ Капитал """
     serializer_class = CapitalSerializer
     permissions_by_action = {
@@ -99,6 +104,32 @@ class CapitalView(PermissionsByActionMixin, ModelViewSet):
         'destroy': RequestUserPermissions.CanEditCapital
     }
     queryset = Capital.objects.all()
+
+    @action(detail=False, methods=['patch'])
+    def multiple_updates(self, request):
+        instances = (
+            self.get_queryset()
+            .filter(pk__in=request.data)
+            .annotate(investment_account_id=F('co_owner__investment_account_id'))
+        )
+        errors = {}
+        save_serializers = []
+        update_fields = set()
+        for instance in instances:
+            self.check_object_permission(request, instance, RequestUserPermissions.CanEditCapital)
+            instance_data = request.data[str(instance.pk)]
+            update_fields |= set(instance_data)
+            serializer = self.get_serializer(instance=instance, data=instance_data, bulk_update=True, partial=True)
+            if serializer.is_valid():
+                save_serializers.append(serializer)
+            else:
+                errors[instance.pk] = serializer.errors
+        if errors:
+            return Response(errors, status=status.HTTP_400_BAD_REQUEST)
+        else:
+            bulk_update_objs = [serializer.save() for serializer in save_serializers]
+            Capital.objects.bulk_update(bulk_update_objs, fields=update_fields)
+            return Response({'ids': list(request.data)}, status=200)
 
 
 class ShareView(PermissionsByActionMixin, ModelViewSet):

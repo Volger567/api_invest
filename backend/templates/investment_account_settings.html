@@ -11,7 +11,7 @@
   {% if request.user.default_investment_account and request.user.default_investment_account.creator == request.user %}
     <h3>Счет: {{ request.user.default_investment_account.name }}({{ request.user.default_investment_account.broker_account_id }})</h3>
     <!-- Общая информация о счете -->
-    <table class="table general-information-table m-auto w-75">
+    <table class="table general-information-table m-auto">
       <caption style="caption-side: top">
         Общая информация о счете
       </caption>
@@ -19,20 +19,20 @@
         <tr class="table-active text-center">
           <th scope="col">Валюта</th>
           <th scope="col">Общий капитал</th>
-          <th scope="col">...</th>
+          <th scope="col">Нераспределенный капитал</th>
           <th scope="col">...</th>
         </tr>
       </thead>
       <tbody>
-      {% for capital in total_capital.values %}
+      {% for iso_code, capital in capital_info.items %}
         <tr class="text-center">
           <th class="general-information-currency">
-            {{ capital.currency }}
+            {{ iso_code }}
           </th>
           <th class="general-information-general-capital">
             {{ capital.total_capital|floatformat:2 }} {{ capital.abbreviation }}
           </th>
-          <th class="">...</th>
+          <th class="">{{ capital.undistributed_capital|floatformat:2 }}</th>
           <th class="">...</th>
         </tr>
       {% endfor %}
@@ -63,19 +63,21 @@
               </thead>
               <tbody>
                 {% for capital in co_owner.capital.all %}
-                  <tr class="text-center">
-                  <th>{{ capital.currency }}</th>
-                  <th class="co-owner-capital">
-                    <input type="number" class="form-control" min="0"
-                           data-target="{{ capital.pk }}" value="{{ capital.value|floatformat:2 }}" step="0.01">
-                  </th>
-                  <th class="co-owner-default-share">
-                    <input type="number" class="form-control" min="0" max="100" step="0.01"
-                           data-target="{{ capital.pk }}" value="{{ capital.default_share|floatformat:2 }}">
-                  </th>
-                  <th class="co-owner-limit">...</th>
-                  <th class="co-owner-circulation">...</th>
-                </tr>
+                  {% if capital.currency.iso_code in capital_info %}
+                  <tr class="text-center capital-row" data-id="{{ capital.id }}">
+                    <th>{{ capital.currency }}</th>
+                    <th class="co-owner-capital">
+                      <input type="number" class="form-control" min="0"
+                             data-id="{{ capital.pk }}" value="{{ capital.value|floatformat:2 }}" step="0.01">
+                    </th>
+                    <th class="co-owner-default-share">
+                      <input type="number" class="form-control" min="0" max="100" step="0.01"
+                             data-id="{{ capital.pk }}" value="{{ capital.default_share|floatformat:2 }}">
+                    </th>
+                    <th class="co-owner-limit">...</th>
+                    <th class="co-owner-circulation">...</th>
+                  </tr>
+                  {% endif %}
                 {% endfor %}
               </tbody>
             </table>

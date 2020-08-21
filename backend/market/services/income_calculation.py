@@ -18,6 +18,7 @@ class SmartInvestorSet:
     """ Набор совладельцев одной сделки """
     def __init__(self):
         self.investors: Dict[T_INVESTOR, 'SmartInvestor'] = {}
+        self.currency = None
 
     def __getitem__(self, item: T_INVESTOR) -> 'SmartInvestor':
         try:
@@ -28,6 +29,10 @@ class SmartInvestorSet:
 
     def add_operation(self, operation: T_OPERATIONS) -> None:
         """ Добавляет одну операцию """
+        if self.currency is None:
+            self.currency = operation.currency
+        elif self.currency != operation.currency:
+            raise ValueError('У всех операций должна быть одинаковая валюта')
         # FIXME: считать дивиденды, надо относительно момента, когда была див. отсечка
         if is_proxy_instance(operation, DividendOperation):
             for investor in self.investors.values():

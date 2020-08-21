@@ -138,3 +138,12 @@ class PermissionsByActionMixin:
         if not isinstance(permissions, (tuple, list)):
             permissions = [permissions]
         return [permission() for permission in permissions]
+
+
+class CheckObjectPermissionMixin:
+    """ Добавляет возможность проверять доступ оп одному конкретному permission """
+    def check_object_permission(self, request, obj, permission):
+        if not permission().has_object_permission(request, self, obj):
+            self.permission_denied(
+                request, message=getattr(permission, 'message', None)
+            )

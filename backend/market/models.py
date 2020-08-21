@@ -134,9 +134,13 @@ class Deal(models.Model):
         smart_investors_set = SmartInvestorSet()
         smart_investors_set.add_operations(operations)
 
+        currency = operations.last().currency
         DealIncome.objects.exclude(co_owner__in=smart_investors_set.investors).delete()
         DealIncome.objects.bulk_create(
-            [DealIncome(deal=self, co_owner=i) for i in smart_investors_set.investors],
+            [
+                DealIncome(deal=self, co_owner=i, currency=currency)
+                for i in smart_investors_set.investors
+            ],
             ignore_conflicts=True
         )
         deal_income_set = DealIncome.objects.filter(deal=self).select_related('co_owner')
@@ -168,6 +172,7 @@ class DealIncome(models.Model):
     )
     # Сколько совладелец заработал с конкретной сделки
     value = models.DecimalField(verbose_name='Доход', max_digits=20, decimal_places=4, default=0)
+    currency = models.ForeignKey('operations.Currency', verbose_name='Валюта', on_delete=models.CASCADE)
 
     def __str__(self):
         return f'{self.deal}: {self.co_owner} ({self.value})'

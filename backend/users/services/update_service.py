@@ -279,13 +279,14 @@ class Updater:
         bulk_create_share = []
         for operation in operations:
             logger.info(f'Операция: {operation}')
+            # Добавление долей для операций
+            for co_owner in co_owners:
+                logger.info(f'Добавление доли операции для {co_owner}')
+                default_share = co_owner.capital.get(currency=operation.currency).default_share
+                bulk_create_share.append(
+                    Share(operation=operation, co_owner_id=co_owner.pk, value=default_share)
+                )
             if is_proxy_instance(operation, (PurchaseOperation, SaleOperation)):
-                for co_owner in co_owners:
-                    logger.info(f'Добавление доли операции для {co_owner}')
-                    default_share = co_owner.capital.get(currency=operation.currency).default_share
-                    bulk_create_share.append(
-                        Share(operation=operation, co_owner_id=co_owner.pk, value=default_share)
-                    )
                 deal, created = (
                     Deal.objects.opened()
                     .get_or_create(instrument=operation.instrument,
