@@ -1,3 +1,5 @@
+import collections
+import decimal
 import logging
 import os
 
@@ -108,6 +110,7 @@ class CapitalView(PermissionsByActionMixin, CheckObjectPermissionMixin, ModelVie
 
     @action(detail=False, methods=['patch'])
     def multiple_updates(self, request):
+        logger.info('Capital множественное обновление')
         capital_ids = tuple(request.data.keys())
         instances = (
             self.get_queryset()
@@ -118,7 +121,7 @@ class CapitalView(PermissionsByActionMixin, CheckObjectPermissionMixin, ModelVie
         save_serializers = []
         update_fields = set()
         investment_account_id = None
-        currencies = set()
+        result = collections.defaultdict(dict)
         for instance in instances:
             self.check_object_permission(request, instance, RequestUserPermissions.CanEditCapital)
             if instance.investment_account_id != investment_account_id and investment_account_id is not None:
@@ -129,25 +132,48 @@ class CapitalView(PermissionsByActionMixin, CheckObjectPermissionMixin, ModelVie
             update_fields |= set(instance_data)
             serializer = self.get_serializer(instance=instance, data=instance_data, bulk_update=True, partial=True)
             if serializer.is_valid():
+                if instance.currency_id not in result:
+                    result[instance.currency_id] = collections.defaultdict(int)
                 save_serializers.append(serializer)
-                currencies.add(instance.currency_id)
+                result[instance.currency_id]['default_share'] += \
+                    serializer.validated_data.get('default_share', instance.default_share)
+                result[instance.currency_id]['value'] += \
+                    serializer.validated_data.get('value', instance.value)
             else:
                 errors[instance.pk] = serializer.errors
         if errors:
             return Response(errors, status=status.HTTP_400_BAD_REQUEST)
         else:
             # XXX: Валидность default_share и value
+            capital_info = InvestmentAccount.objects.get(pk=investment_account_id).capital_info()
+            logger.info(capital_info)
+            logger.info(result)
             capital = (
                 Capital.objects
-                .filter(co_owner__investment_account_id=investment_account_id, currency_id__in=currencies)
+                .filter(co_owner__investment_account_id=investment_account_id, currency_id__in=result.keys())
                 .exclude(pk__in=capital_ids)
                 .values('currency')
                 .order_by()
                 .annotate(total_default_share=Sum('default_share'), total_capital=Sum('value'))
             )
+            logger.info(capital)
+            if not capital.exists():
+                capital = []
+                for currency in result:
+                    capital.append({
+                        'currency': currency,
+                        'total_default_share': decimal.Decimal('0'),
+                        'total_capital': decimal.Decimal('0')
+                    })
+            for cap in capital:
+                logger.info(cap['total_default_share'] + result[cap['currency']]['default_share'])
+                if cap['total_default_share'] + result[cap['currency']]['default_share'] > 1:
+                    raise ValidationError(f'Сумма всех долей валюты {cap["currency"]} > 100%')
+                if cap['total_capital'] + result[cap['currency']]['value'] > capital_info[cap['currency']]['total_capital']:
+                    raise ValidationError(f'Сумма всех капиталов валюты {cap["currency"]} > {capital_info[cap["currency"]]["total_capital"]}')
             bulk_update_objs = [serializer.save() for serializer in save_serializers]
             Capital.objects.bulk_update(bulk_update_objs, fields=update_fields)
-            return Response({'ids': list(request.data)}, status=200)
+            return Response({'ids': capital_ids}, status=200)
 
 
 class ShareView(PermissionsByActionMixin, ModelViewSet):
