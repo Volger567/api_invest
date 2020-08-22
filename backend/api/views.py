@@ -1,9 +1,10 @@
 import logging
 import os
 
-from django.db.models import F
+from django.db.models import F, Sum
 from rest_framework import status
 from rest_framework.decorators import action
+from rest_framework.exceptions import ValidationError
 from rest_framework.filters import SearchFilter
 from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
@@ -107,26 +108,43 @@ class CapitalView(PermissionsByActionMixin, CheckObjectPermissionMixin, ModelVie
 
     @action(detail=False, methods=['patch'])
     def multiple_updates(self, request):
+        capital_ids = tuple(request.data.keys())
         instances = (
             self.get_queryset()
-            .filter(pk__in=request.data)
+            .filter(pk__in=capital_ids)
             .annotate(investment_account_id=F('co_owner__investment_account_id'))
         )
         errors = {}
         save_serializers = []
         update_fields = set()
+        investment_account_id = None
+        currencies = set()
         for instance in instances:
             self.check_object_permission(request, instance, RequestUserPermissions.CanEditCapital)
+            if instance.investment_account_id != investment_account_id and investment_account_id is not None:
+                raise ValidationError('Все capital должны принадлежать одному ИС')
+            if investment_account_id is None:
+                investment_account_id = instance.investment_account_id
             instance_data = request.data[str(instance.pk)]
             update_fields |= set(instance_data)
             serializer = self.get_serializer(instance=instance, data=instance_data, bulk_update=True, partial=True)
             if serializer.is_valid():
                 save_serializers.append(serializer)
+                currencies.add(instance.currency_id)
             else:
                 errors[instance.pk] = serializer.errors
         if errors:
             return Response(errors, status=status.HTTP_400_BAD_REQUEST)
         else:
+            # XXX: Валидность default_share и value
+            capital = (
+                Capital.objects
+                .filter(co_owner__investment_account_id=investment_account_id, currency_id__in=currencies)
+                .exclude(pk__in=capital_ids)
+                .values('currency')
+                .order_by()
+                .annotate(total_default_share=Sum('default_share'), total_capital=Sum('value'))
+            )
             bulk_update_objs = [serializer.save() for serializer in save_serializers]
             Capital.objects.bulk_update(bulk_update_objs, fields=update_fields)
             return Response({'ids': list(request.data)}, status=200)
