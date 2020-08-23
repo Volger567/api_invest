@@ -90,21 +90,11 @@ class CapitalSerializer(ExcludeFieldsMixin, serializers.ModelSerializer):
         model = Capital
         fields = ('id', 'co_owner', 'currency', 'value', 'default_share')
 
-    default_share = serializers.DecimalField(max_digits=9, decimal_places=6, min_value=0, max_value=100)
+    default_share = serializers.DecimalField(max_digits=7, decimal_places=6, min_value=0, max_value=1)
 
     def __init__(self, *args, **kwargs):
         self.is_bulk_update = kwargs.pop('bulk_update', False)
         super().__init__(*args, **kwargs)
-
-    def validate_default_share(self, value):
-        """ Если доля по умолчанию > 1, то делится на 100 (выражение в процентах).
-            Таким образом, при передаче 40 - будет переведено в 0.4
-        """
-        if self.context.get('total_default_share') is not None:
-            return value/self.context['total_default_share']
-        elif 1 < value < 100:
-            return value / 100
-        return value
 
     def validate(self, attrs):
         if self.is_bulk_update:

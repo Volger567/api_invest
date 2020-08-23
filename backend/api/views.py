@@ -156,6 +156,7 @@ class CapitalView(PermissionsByActionMixin, CheckObjectPermissionMixin, ModelVie
                 .order_by()
                 .annotate(total_default_share=Sum('default_share'), total_capital=Sum('value'))
             )
+            update_default_share = {}
             logger.info(capital)
             if not capital.exists():
                 capital = []
@@ -167,12 +168,17 @@ class CapitalView(PermissionsByActionMixin, CheckObjectPermissionMixin, ModelVie
                     })
             for cap in capital:
                 logger.info(cap['total_default_share'] + result[cap['currency']]['default_share'])
-                if cap['total_default_share'] + result[cap['currency']]['default_share'] > 1:
-                    raise ValidationError(f'Сумма всех долей валюты {cap["currency"]} > 100%')
+                if not (0 < cap['total_default_share'] + result[cap['currency']]['default_share'] <= 1):
+                    raise ValidationError(f'Сумма всех долей валюты {cap["currency"]} должна быть больше 0 и не больше 1')
+                elif cap['total_default_share'] + result[cap['currency']]['default_share'] < 1:
+                    update_default_share[cap['currency']] = 1 / (cap['total_default_share'] + result[cap['currency']]['default_share'])
                 if cap['total_capital'] + result[cap['currency']]['value'] > capital_info[cap['currency']]['total_capital']:
                     raise ValidationError(f'Сумма всех капиталов валюты {cap["currency"]} > {capital_info[cap["currency"]]["total_capital"]}')
             bulk_update_objs = [serializer.save() for serializer in save_serializers]
             Capital.objects.bulk_update(bulk_update_objs, fields=update_fields)
+            logger.info(update_default_share)
+            for key, value in update_default_share.items():
+                Capital.objects.filter(co_owner__investment_account_id=investment_account_id, currency_id=key).update(default_share=F('default_share')*value)
             return Response({'ids': capital_ids}, status=200)
 
 
