@@ -105,6 +105,9 @@ class CapitalSerializer(ExcludeFieldsMixin, serializers.ModelSerializer):
         return super().validate(attrs)
 
     def update(self, instance, validated_data):
+        """ Добавляет возможность одновременного обновления нескольких записей,
+            если нет полей m2m
+        """
         if self.is_bulk_update:
             raise_errors_on_nested_writes('update', self, validated_data)
             info = model_meta.get_field_info(instance)

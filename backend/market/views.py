@@ -63,6 +63,7 @@ class DealsView(LoginRequiredMixin, UpdateInvestmentAccountMixin, TemplateView):
     template_name = 'deals.html'
 
     def get_context_data(self, **kwargs):
+        # TODO: все в бизнес-логику
         figi = self.request.GET.get('figi')
         try:
             figi_object = StockInstrument.objects.get(figi=figi)

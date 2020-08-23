@@ -2,6 +2,7 @@ version: "3"
 
 volumes:
   postgres_data:
+  tinkoff_investment_static:
 
 services:
   db:
@@ -22,7 +23,19 @@ services:
       - backend/.env
     volumes:
       - .:/code
-    ports:
-      - "9999:9999"
+      - tinkoff_investment_static:/code/backend/staticfiles
+    expose:
+      - 9999
     depends_on:
       - db
+    dns:
+      - 8.8.8.8
+
+  nginx:
+    build: backend/nginx
+    ports:
+      - 1337:80
+    depends_on:
+      - web
+    volumes:
+    - tinkoff_investment_static:/code/backend/staticfiles

@@ -1,10 +1,21 @@
 # Tinkoff Investment
 Сайт для сбора статистики с Тинькофф Инвестиций
 
-Технологии
-
+**Backend:**
 * **Python3.8**
-* **Django3.0**
+* **Django3**
+* **Docker**
+* **PostgreSQL 12.3**
+* **Gunicorn**
+* **Nginx**
+
+**Frontend:**
+* **Шаблонизатор DTL**
+* **Bootstrap4**
+* **JQuery**
+
+В дальнейшем планируется переписать на Vue.js, добавить Redis как брокера сообщений
+(для отправки регистрационного письма и т.д)
 
 Запуск
 * Скопировать файл **backend/.env.example** в **backend/.env**

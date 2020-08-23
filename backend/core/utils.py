@@ -56,6 +56,9 @@ class ProxyInheritanceQuerySet(models.QuerySet):
 
 
 class ProxyInheritanceManager(models.Manager):
+    """ Реализация наследования моделей за счет определения всех полей
+        всех моделей в одной базовой модели
+    """
     def get_queryset(self):
         return ProxyInheritanceQuerySet(self.model, using=self._db).filter(ProxyQ(proxy_instance_of=self.model))
 
@@ -141,7 +144,7 @@ class PermissionsByActionMixin:
 
 
 class CheckObjectPermissionMixin:
-    """ Добавляет возможность проверять доступ оп одному конкретному permission """
+    """ Добавляет возможность проверять доступ к объекту оп одному конкретному permission """
     def check_object_permission(self, request, obj, permission):
         if not permission().has_object_permission(request, self, obj):
             self.permission_denied(
