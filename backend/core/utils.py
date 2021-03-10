@@ -103,7 +103,7 @@ class ProxyQ(Q):
 
 def word2declension(num: int, nominative: str, genitive: str, plural: str):
     """
-        Склоняет слово в зависимости в соответствии с переданным числом
+        Склоняет слово в соответствии с переданным числом
     :param num: число
     :param nominative: слово в именительном падеже
     :param genitive: слово в родительный падеже

@@ -138,6 +138,13 @@ class InvestmentAccount(models.Model):
                     capital_info[capital['currency']]['total_capital'] - capital['distributed_capital']
         return dict(capital_info)
 
+    def update_shares_by_default_share(self):
+        """ Обновление долей в операциях ИС установленного по умолчанию
+            в соответствии со значением default_share капиталов
+        """
+        # XXX:
+        self.operations.filter()
+
     def update_portfolio(self, now=None):
         """ Обновление всего портфеля.
             Включает в себя обновление операций, сделок, валютных активов

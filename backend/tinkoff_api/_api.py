@@ -125,7 +125,7 @@ class TinkoffProfile:
                 })
                 return 'sandbox' if self.is_sandbox_token_valid else 'production'
             elif response.status_code in (401, 500):
-                pass
+                logger.warning(f'Токен ...{self.token[-5:]} не подошел для авторизации')
         raise InvalidTokenError('Авторизация по токенам не удалась')
 
     @property

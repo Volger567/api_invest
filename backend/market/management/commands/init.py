@@ -111,5 +111,5 @@ class Command(BaseCommand):
                         'currency_id': stock['currency'],
                         'name': stock['name']
                     }))
-            StockInstrument.objects.bulk_create(result)
+            StockInstrument.objects.bulk_create(result, ignore_conflicts=True)
         logger.info('Список ценных бумаг получен и добавлен в БД')

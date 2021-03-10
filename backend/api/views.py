@@ -72,7 +72,8 @@ class InvestmentAccountView(PermissionsByActionMixin, ModelViewSet):
         'retrieve': RequestUserPermissions.CanRetrieveInvestmentAccount,
         'update': RequestUserPermissions.CanEditInvestmentAccount,
         'partial_update': RequestUserPermissions.CanEditInvestmentAccount,
-        'destroy': RequestUserPermissions.CanEditInvestmentAccount
+        'destroy': RequestUserPermissions.CanEditInvestmentAccount,
+        'update_shares_by_default_share': RequestUserPermissions.CanEditDefaultInvestmentAccount
     }
     queryset = InvestmentAccount.objects.all()
 
@@ -80,6 +81,14 @@ class InvestmentAccountView(PermissionsByActionMixin, ModelViewSet):
         """ Список ИС, владельцем которых является пользователь """
         queryset = super().filter_queryset(queryset)
         return queryset.filter(creator=self.request.user)
+
+    @action(detail=False, methods=['post'])
+    def update_shares_by_default_share(self, request):
+        """ Обновление долей в операциях ИС установленного по умолчанию
+            в соответствии со значением default_share капиталов
+        """
+        request.user.default_investment_account.update_shares_by_default_share()
+        return Response(status=status.HTTP_200_OK)
 
 
 class CoOwnerView(PermissionsByActionMixin, ModelViewSet):
@@ -170,7 +179,7 @@ class CapitalView(PermissionsByActionMixin, CheckObjectPermissionMixin, ModelVie
             serializer = self.get_serializer(instance=instance, data=instance_data, bulk_update=True, partial=True)
             if serializer.is_valid():
                 if instance.currency_id not in validated_data:
-                    validated_data[instance.currency_id] = TValidatedDataByCurrency(int)
+                    validated_data[instance.currency_id] = TValidatedDataByCurrency(decimal.Decimal)
                 save_serializers.append(serializer)
                 # Если поле не изменялось, то его не будет в validated_data сериализатора.
                 # Поэтому берем значение, которое у instance установлено
@@ -208,15 +217,24 @@ class CapitalView(PermissionsByActionMixin, CheckObjectPermissionMixin, ModelVie
                         'total_default_share': decimal.Decimal('0'),
                         'total_value': decimal.Decimal('0')
                     })
+            logger.info(f'Общая валидация: {validated_data}')
             for remaining_capital_item in remaining_capital:
                 currency = remaining_capital_item['currency']
+                logger.info(f'Валюта: {currency}')
                 info_total_capital = capital_info[currency]['total_capital']
+                logger.info(f'Доступный капитал: {info_total_capital}')
                 remaining_total_default_share = remaining_capital_item['total_default_share']
+                logger.info(f'Сумма остальных долей: {remaining_total_default_share}')
                 remaining_total_capital = remaining_capital_item['total_value']
-                validated_total_default_share = validated_data[currency]['default_share']
+                logger.info(f'Сумма остальных капиталов: {remaining_total_capital}')
+                validated_total_default_share = validated_data[currency]['total_default_share']
+                logger.info(f'Сумма долей, прошедших валидацию: {validated_total_default_share}')
                 validated_total_capital = validated_data[currency]['total_value']
+                logger.info(f'Сумма капиталов, прошедших валидацию: {validated_total_capital}')
                 total_default_share = remaining_total_default_share + validated_total_default_share
+                logger.info(f'Сумма всех долей валюты: {total_default_share}')
                 total_capital = remaining_total_capital + validated_total_capital
+                logger.info(f'Сумма всех капиталов валюты: {total_capital}')
 
                 if not (0 < total_default_share <= 1):
                     raise ValidationError(f'Сумма всех долей валюты {currency} должна быть больше 0 и не больше 1')
